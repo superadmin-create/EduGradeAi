@@ -20,7 +20,18 @@ const assignmentSchema = z.object({
 
 type AssignmentForm = z.infer<typeof assignmentSchema>;
 
-export default function AssignmentUpload() {
+interface Question {
+  id: string;
+  question: string;
+  expectedAnswer: string;
+  points: number;
+}
+
+interface AssignmentUploadProps {
+  questions: Question[];
+}
+
+export default function AssignmentUpload({ questions }: AssignmentUploadProps) {
   const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -63,7 +74,10 @@ export default function AssignmentUpload() {
   };
 
   const onSubmit = (data: AssignmentForm) => {
-    if (uploadedFiles.length === 0) {
+    // In development mode, allow assignment creation without files for testing
+    const isDevelopment = import.meta.env.DEV;
+    
+    if (!isDevelopment && uploadedFiles.length === 0) {
       toast({
         title: "Error",
         description: "Please upload at least one assignment file",
@@ -72,16 +86,14 @@ export default function AssignmentUpload() {
       return;
     }
 
-    // For now, create a basic assignment structure
-    // In a real implementation, you would parse the uploaded files to extract questions
-    const questions = [
-      {
-        id: "1",
-        question: "Sample question extracted from uploaded file",
-        expectedAnswer: "Sample expected answer",
-        points: 10,
-      },
-    ];
+    if (questions.length === 0) {
+      toast({
+        title: "Error",
+        description: "Please add at least one question in the Answer Key section",
+        variant: "destructive",
+      });
+      return;
+    }
 
     const totalPoints = questions.reduce((sum, q) => sum + q.points, 0);
     createAssignmentMutation.mutate({
