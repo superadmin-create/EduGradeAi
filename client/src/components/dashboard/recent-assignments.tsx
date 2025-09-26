@@ -9,13 +9,9 @@ interface Assignment {
   title: string;
   course: string;
   createdAt: string;
-  totalPoints: number;
-  questions: Array<{
-    id: string;
-    question: string;
-    expectedAnswer: string;
-    points: number;
-  }>;
+  maxPoints: number;
+  caseStudyContent: string;
+  description?: string;
 }
 
 export default function RecentAssignments() {

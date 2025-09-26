@@ -14,13 +14,9 @@ interface Assignment {
   title: string;
   course: string;
   createdAt: string;
-  totalPoints: number;
-  questions: Array<{
-    id: string;
-    question: string;
-    expectedAnswer: string;
-    points: number;
-  }>;
+  maxPoints: number;
+  caseStudyContent: string;
+  description?: string;
 }
 
 export default function Assignments() {
@@ -164,10 +160,10 @@ export default function Assignments() {
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
                     <Badge variant="outline" className="text-xs">
-                      {assignment.questions.length} Questions
+                      Case Study
                     </Badge>
                     <span className="text-sm font-medium text-foreground">
-                      {assignment.totalPoints} Points
+                      {assignment.maxPoints} Points
                     </span>
                   </div>
                   

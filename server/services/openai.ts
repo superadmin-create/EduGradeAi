@@ -5,73 +5,52 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY || process.env.OPENAI_API_KEY_ENV_VAR || "default_key"
 });
 
-interface Question {
-  id: string;
-  question: string;
-  expectedAnswer: string;
-  points: number;
-}
-
 interface GradingRequest {
-  questions: Question[];
-  studentAnswers: string;
-  totalPoints: number;
-}
-
-interface QuestionScore {
-  questionId: string;
-  score: number;
-  maxScore: number;
-  feedback: string;
-  reasoning: string;
+  caseStudyContent: string;
+  studentResponse: string;
+  maxPoints: number;
+  assignmentTitle: string;
 }
 
 interface GradingResponse {
-  overallScore: number;
+  score: number;
   maxScore: number;
   percentage: number;
-  questionScores: QuestionScore[];
-  generalFeedback: string;
+  feedback: string;
   strengths: string[];
   improvements: string[];
+  reasoning: string;
 }
 
 export async function gradeAssignment(request: GradingRequest): Promise<GradingResponse> {
   try {
     const prompt = `
-You are an expert academic grader. Please grade this student's assignment submission carefully and provide detailed feedback.
+You are an expert academic grader evaluating a student's response to a case study assignment.
 
-ASSIGNMENT QUESTIONS AND EXPECTED ANSWERS:
-${request.questions.map(q => `
-Question ${q.id}: ${q.question}
-Expected Answer: ${q.expectedAnswer}
-Points: ${q.points}
-`).join('\n')}
+ASSIGNMENT: ${request.assignmentTitle}
+MAX POINTS: ${request.maxPoints}
 
-STUDENT SUBMISSION:
-${request.studentAnswers}
+CASE STUDY:
+${request.caseStudyContent}
 
-Please analyze the student's submission and provide a comprehensive grading response. Grade each question individually based on how well the student's answer matches the expected answer, considering:
-- Accuracy and correctness of key concepts
-- Completeness of the answer
-- Understanding demonstrated
-- Quality of explanation
+STUDENT RESPONSE:
+${request.studentResponse}
+
+Please evaluate this student's response to the case study. Consider the following criteria:
+- Understanding of the case study scenario
+- Quality of analysis and critical thinking
+- Application of relevant concepts and theories
+- Depth of insight and reasoning
+- Clarity and organization of response
+- Use of evidence from the case study
 
 Respond with a JSON object in this exact format:
 {
-  "overallScore": number,
-  "maxScore": ${request.totalPoints},
+  "score": number (0 to ${request.maxPoints}),
+  "maxScore": ${request.maxPoints},
   "percentage": number (0-100),
-  "questionScores": [
-    {
-      "questionId": "string",
-      "score": number,
-      "maxScore": number,
-      "feedback": "detailed feedback for this question",
-      "reasoning": "explanation of why this score was given"
-    }
-  ],
-  "generalFeedback": "overall feedback about the entire submission",
+  "feedback": "detailed feedback explaining the grade and what the student did well or could improve",
+  "reasoning": "explanation of how you arrived at this score",
   "strengths": ["strength1", "strength2"],
   "improvements": ["improvement1", "improvement2"]
 }`;
@@ -81,7 +60,7 @@ Respond with a JSON object in this exact format:
       messages: [
         {
           role: "system",
-          content: "You are an expert academic grader. Provide fair, detailed, and constructive feedback. Always respond with valid JSON in the exact format requested."
+          content: "You are an expert academic grader specializing in case study evaluation. Provide fair, detailed, and constructive feedback. Always respond with valid JSON in the exact format requested."
         },
         {
           role: "user",
@@ -94,12 +73,15 @@ Respond with a JSON object in this exact format:
     const result = JSON.parse(response.choices[0].message.content || "{}");
     
     // Validate and ensure all required fields are present
+    const score = Math.max(0, Math.min(request.maxPoints, result.score || 0));
+    const percentage = Math.round((score / request.maxPoints) * 100);
+    
     return {
-      overallScore: Math.max(0, Math.min(request.totalPoints, result.overallScore || 0)),
-      maxScore: request.totalPoints,
-      percentage: Math.max(0, Math.min(100, result.percentage || 0)),
-      questionScores: result.questionScores || [],
-      generalFeedback: result.generalFeedback || "No general feedback provided",
+      score,
+      maxScore: request.maxPoints,
+      percentage,
+      feedback: result.feedback || "No feedback provided",
+      reasoning: result.reasoning || "No reasoning provided",
       strengths: result.strengths || [],
       improvements: result.improvements || []
     };

@@ -16,14 +16,8 @@ export const assignments = pgTable("assignments", {
   title: text("title").notNull(),
   course: text("course").notNull(),
   description: text("description"),
-  caseStudyPrompt: text("case_study_prompt").notNull(),
-  evaluationCriteria: jsonb("evaluation_criteria").notNull().$type<Array<{
-    id: string;
-    criterion: string;
-    description: string;
-    points: number;
-  }>>(),
-  totalPoints: integer("total_points").notNull(),
+  caseStudyContent: text("case_study_content").notNull(),
+  maxPoints: integer("max_points").notNull().default(100),
   dueDate: timestamp("due_date"),
   createdAt: timestamp("created_at").default(sql`now()`).notNull(),
   userId: varchar("user_id").notNull().references(() => users.id),
@@ -44,22 +38,13 @@ export const gradingResults = pgTable("grading_results", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   submissionId: varchar("submission_id").notNull().references(() => submissions.id),
   aiAnalysis: jsonb("ai_analysis").notNull().$type<{
-    overallScore: number;
+    score: number;
     maxScore: number;
     percentage: number;
-    criteriaScores: Array<{
-      criterionId: string;
-      score: number;
-      maxScore: number;
-      feedback: string;
-      reasoning: string;
-    }>;
-    generalFeedback: string;
+    feedback: string;
     strengths: string[];
     improvements: string[];
-    analysisQuality: string;
-    conceptApplication: string;
-    criticalThinking: string;
+    reasoning: string;
   }>(),
   finalScore: integer("final_score").notNull(),
   maxScore: integer("max_score").notNull(),
@@ -72,7 +57,7 @@ export const insertAssignmentSchema = createInsertSchema(assignments).omit({
   id: true,
   createdAt: true,
 }).extend({
-  totalPoints: z.number().min(0),
+  maxPoints: z.number().min(1).max(1000),
 });
 
 export const insertSubmissionSchema = createInsertSchema(submissions).omit({

@@ -88,13 +88,8 @@ export class MemStorage implements IStorage {
       title: insertAssignment.title,
       course: insertAssignment.course,
       description: insertAssignment.description || null,
-      questions: insertAssignment.questions as Array<{
-        id: string;
-        question: string;
-        expectedAnswer: string;
-        points: number;
-      }>,
-      totalPoints: insertAssignment.totalPoints,
+      caseStudyContent: insertAssignment.caseStudyContent,
+      maxPoints: insertAssignment.maxPoints,
       dueDate: null,
       createdAt: new Date(),
       userId: insertAssignment.userId,
@@ -176,19 +171,13 @@ export class MemStorage implements IStorage {
       id,
       submissionId: insertResult.submissionId,
       aiAnalysis: {
-        overallScore: insertResult.aiAnalysis.overallScore,
+        score: insertResult.aiAnalysis.score,
         maxScore: insertResult.aiAnalysis.maxScore,
         percentage: insertResult.aiAnalysis.percentage,
-        questionScores: insertResult.aiAnalysis.questionScores as Array<{
-          questionId: string;
-          score: number;
-          maxScore: number;
-          feedback: string;
-          reasoning: string;
-        }>,
-        generalFeedback: insertResult.aiAnalysis.generalFeedback,
+        feedback: insertResult.aiAnalysis.feedback,
         strengths: insertResult.aiAnalysis.strengths as string[],
         improvements: insertResult.aiAnalysis.improvements as string[],
+        reasoning: insertResult.aiAnalysis.reasoning,
       },
       finalScore: insertResult.finalScore,
       maxScore: insertResult.maxScore,

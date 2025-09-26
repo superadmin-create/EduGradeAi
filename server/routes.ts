@@ -186,19 +186,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Grade using AI
       const gradingResult = await gradeAssignment({
-        questions: assignment.questions,
-        studentAnswers: submission.content,
-        totalPoints: assignment.totalPoints,
+        caseStudyContent: assignment.caseStudyContent,
+        studentResponse: submission.content,
+        maxPoints: assignment.maxPoints,
+        assignmentTitle: assignment.title,
       });
 
       // Save grading result
       const result = await storage.createGradingResult({
         submissionId: submission.id,
         aiAnalysis: gradingResult,
-        finalScore: gradingResult.overallScore,
+        finalScore: gradingResult.score,
         maxScore: gradingResult.maxScore,
         percentage: gradingResult.percentage,
-        feedback: gradingResult.generalFeedback,
+        feedback: gradingResult.feedback,
       });
 
       res.json(result);
@@ -223,18 +224,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
       for (const submission of ungradedSubmissions) {
         try {
           const gradingResult = await gradeAssignment({
-            questions: assignment.questions,
-            studentAnswers: submission.content,
-            totalPoints: assignment.totalPoints,
+            caseStudyContent: assignment.caseStudyContent,
+            studentResponse: submission.content,
+            maxPoints: assignment.maxPoints,
+            assignmentTitle: assignment.title,
           });
 
           const result = await storage.createGradingResult({
             submissionId: submission.id,
             aiAnalysis: gradingResult,
-            finalScore: gradingResult.overallScore,
+            finalScore: gradingResult.score,
             maxScore: gradingResult.maxScore,
             percentage: gradingResult.percentage,
-            feedback: gradingResult.generalFeedback,
+            feedback: gradingResult.feedback,
           });
 
           results.push(result);

@@ -1,14 +1,12 @@
-import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { CloudUpload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Form, FormControl, FormField, FormItem, FormLabel } from "@/components/ui/form";
-import FileDropzone from "@/components/ui/file-dropzone";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 
@@ -16,23 +14,13 @@ const assignmentSchema = z.object({
   title: z.string().min(1, "Title is required"),
   course: z.string().min(1, "Course is required"),
   description: z.string().optional(),
+  caseStudyContent: z.string().min(1, "Case study content is required"),
+  maxPoints: z.number().min(1).max(1000),
 });
 
 type AssignmentForm = z.infer<typeof assignmentSchema>;
 
-interface Question {
-  id: string;
-  question: string;
-  expectedAnswer: string;
-  points: number;
-}
-
-interface AssignmentUploadProps {
-  questions: Question[];
-}
-
-export default function AssignmentUpload({ questions }: AssignmentUploadProps) {
-  const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
+export default function AssignmentUpload() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -42,11 +30,13 @@ export default function AssignmentUpload({ questions }: AssignmentUploadProps) {
       title: "",
       course: "",
       description: "",
+      caseStudyContent: "",
+      maxPoints: 100,
     },
   });
 
   const createAssignmentMutation = useMutation({
-    mutationFn: async (data: AssignmentForm & { questions: any[] }) => {
+    mutationFn: async (data: AssignmentForm) => {
       const response = await apiRequest("POST", "/api/assignments", data);
       return response.json();
     },
@@ -56,7 +46,6 @@ export default function AssignmentUpload({ questions }: AssignmentUploadProps) {
         description: "Assignment created successfully",
       });
       form.reset();
-      setUploadedFiles([]);
       queryClient.invalidateQueries({ queryKey: ["/api/assignments"] });
       queryClient.invalidateQueries({ queryKey: ["/api/stats"] });
     },
@@ -69,69 +58,16 @@ export default function AssignmentUpload({ questions }: AssignmentUploadProps) {
     },
   });
 
-  const handleFilesSelected = (files: File[]) => {
-    setUploadedFiles(files);
-  };
-
   const onSubmit = (data: AssignmentForm) => {
-    // In development mode, allow assignment creation without files for testing
-    const isDevelopment = import.meta.env.DEV;
-    
-    if (!isDevelopment && uploadedFiles.length === 0) {
-      toast({
-        title: "Error",
-        description: "Please upload at least one assignment file",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    if (questions.length === 0) {
-      toast({
-        title: "Error",
-        description: "Please add at least one question in the Answer Key section",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    const totalPoints = questions.reduce((sum, q) => sum + q.points, 0);
-    createAssignmentMutation.mutate({
-      ...data,
-      questions,
-      totalPoints,
-    });
+    createAssignmentMutation.mutate(data);
   };
 
   return (
     <div className="bg-card rounded-lg border border-border p-6">
-      <h3 className="text-lg font-semibold text-foreground mb-4">Upload New Assignment</h3>
+      <h3 className="text-lg font-semibold text-foreground mb-4">Create Case Study Assignment</h3>
       
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-          <FileDropzone
-            onFilesSelected={handleFilesSelected}
-            acceptedTypes={{
-              "application/pdf": [".pdf"],
-              "application/msword": [".doc"],
-              "application/vnd.openxmlformats-officedocument.wordprocessingml.document": [".docx"],
-              "text/plain": [".txt"],
-            }}
-            maxSize={10 * 1024 * 1024}
-            multiple={false}
-          />
-
-          {uploadedFiles.length > 0 && (
-            <div className="p-3 bg-muted/50 rounded-lg">
-              <p className="text-sm font-medium text-foreground">Uploaded Files:</p>
-              {uploadedFiles.map((file, index) => (
-                <p key={index} className="text-sm text-muted-foreground">
-                  {file.name} ({(file.size / 1024 / 1024).toFixed(2)} MB)
-                </p>
-              ))}
-            </div>
-          )}
-
           <FormField
             control={form.control}
             name="title"
@@ -167,6 +103,45 @@ export default function AssignmentUpload({ questions }: AssignmentUploadProps) {
                     <SelectItem value="data-structures">Data Structures</SelectItem>
                   </SelectContent>
                 </Select>
+              </FormItem>
+            )}
+          />
+
+          <FormField
+            control={form.control}
+            name="caseStudyContent"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Case Study Content</FormLabel>
+                <FormControl>
+                  <Textarea 
+                    placeholder="Enter the case study scenario, background, and any questions students should address..." 
+                    className="min-h-[120px]"
+                    {...field}
+                    data-testid="textarea-case-study"
+                  />
+                </FormControl>
+              </FormItem>
+            )}
+          />
+
+          <FormField
+            control={form.control}
+            name="maxPoints"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Maximum Points</FormLabel>
+                <FormControl>
+                  <Input 
+                    type="number" 
+                    min="1" 
+                    max="1000"
+                    placeholder="100" 
+                    {...field}
+                    onChange={(e) => field.onChange(parseInt(e.target.value) || 100)}
+                    data-testid="input-max-points"
+                  />
+                </FormControl>
               </FormItem>
             )}
           />
