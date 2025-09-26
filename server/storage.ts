@@ -171,11 +171,11 @@ export class MemStorage implements IStorage {
       id,
       submissionId: insertResult.submissionId,
       aiAnalysis: {
+        grade: insertResult.aiAnalysis.grade,
         score: insertResult.aiAnalysis.score,
         maxScore: insertResult.aiAnalysis.maxScore,
         percentage: insertResult.aiAnalysis.percentage,
         feedback: insertResult.aiAnalysis.feedback,
-        strengths: insertResult.aiAnalysis.strengths as string[],
         improvements: insertResult.aiAnalysis.improvements as string[],
         reasoning: insertResult.aiAnalysis.reasoning,
       },

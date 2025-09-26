@@ -13,19 +13,19 @@ interface GradingRequest {
 }
 
 interface GradingResponse {
+  grade: string; // A+, A, A-, B+, B, B-, C+, C, C-, D+, D, D-, F
   score: number;
   maxScore: number;
   percentage: number;
-  feedback: string;
-  strengths: string[];
-  improvements: string[];
+  feedback: string; // 3-5 sentences highlighting strengths
+  improvements: string[]; // 2-3 actionable suggestions
   reasoning: string;
 }
 
 export async function gradeAssignment(request: GradingRequest): Promise<GradingResponse> {
   try {
     const prompt = `
-You are an expert academic grader evaluating a student's response to a case study assignment.
+You are an AI Assignment Checker evaluating a student's case study assignment.
 
 ASSIGNMENT: ${request.assignmentTitle}
 MAX POINTS: ${request.maxPoints}
@@ -36,31 +36,33 @@ ${request.caseStudyContent}
 STUDENT RESPONSE:
 ${request.studentResponse}
 
-Please evaluate this student's response to the case study. Consider the following criteria:
-- Understanding of the case study scenario
-- Quality of analysis and critical thinking
-- Application of relevant concepts and theories
-- Depth of insight and reasoning
-- Clarity and organization of response
-- Use of evidence from the case study
+Evaluate this assignment carefully and check these key aspects:
+- Understanding of the topic
+- Depth of analysis
+- Structure and clarity of writing
+- Originality and critical thinking
+- Relevance to the given question/case
+- Grammar, spelling, and presentation
 
 Respond with a JSON object in this exact format:
 {
+  "grade": "letter grade from A+ to F (A+, A, A-, B+, B, B-, C+, C, C-, D+, D, D-, F)",
   "score": number (0 to ${request.maxPoints}),
   "maxScore": ${request.maxPoints},
   "percentage": number (0-100),
-  "feedback": "detailed feedback explaining the grade and what the student did well or could improve",
-  "reasoning": "explanation of how you arrived at this score",
-  "strengths": ["strength1", "strength2"],
-  "improvements": ["improvement1", "improvement2"]
-}`;
+  "feedback": "3-5 sentences highlighting the student's strengths and what they did well",
+  "reasoning": "brief explanation of how you arrived at this grade",
+  "improvements": ["2-3 clear, actionable suggestions for improvement"]
+}
+
+Be objective, fair, professional, constructive, and concise. Do not rewrite the student's work.`;
 
     const response = await openai.chat.completions.create({
       model: "gpt-5",
       messages: [
         {
           role: "system",
-          content: "You are an expert academic grader specializing in case study evaluation. Provide fair, detailed, and constructive feedback. Always respond with valid JSON in the exact format requested."
+          content: "You are an AI Assignment Checker. Be objective, fair, professional, constructive, and concise. Always respond with valid JSON in the exact format requested. Give grades from A+ to F based on overall quality."
         },
         {
           role: "user",
@@ -77,12 +79,12 @@ Respond with a JSON object in this exact format:
     const percentage = Math.round((score / request.maxPoints) * 100);
     
     return {
+      grade: result.grade || "F",
       score,
       maxScore: request.maxPoints,
       percentage,
       feedback: result.feedback || "No feedback provided",
       reasoning: result.reasoning || "No reasoning provided",
-      strengths: result.strengths || [],
       improvements: result.improvements || []
     };
 

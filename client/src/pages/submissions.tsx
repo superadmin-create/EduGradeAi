@@ -6,10 +6,12 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import UploadModal from "@/components/submissions/upload-modal";
 
 export default function Submissions() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedAssignment, setSelectedAssignment] = useState<string>("all");
+  const [uploadModalOpen, setUploadModalOpen] = useState(false);
 
   interface Assignment {
     id: string;
@@ -17,13 +19,78 @@ export default function Submissions() {
     course: string;
   }
 
+  interface Submission {
+    id: string;
+    assignmentId: string;
+    studentName: string;
+    studentId: string;
+    content: string;
+    fileName?: string;
+    submittedAt: string;
+    isGraded: boolean;
+    assignmentTitle?: string;
+    assignmentCourse?: string;
+    score?: number;
+    maxScore?: number;
+    percentage?: number;
+  }
+
   const { data: assignments } = useQuery<Assignment[]>({
     queryKey: ["/api/assignments"],
   });
 
-  // For demo purposes, we'll show empty state
-  // In real implementation, you'd fetch submissions based on selected assignment
-  const submissions: any[] = [];
+  // Fetch submissions for the selected assignment
+  const { data: submissions = [], isLoading: submissionsLoading } = useQuery({
+    queryKey: ["/api/assignments", selectedAssignment, "submissions"],
+    queryFn: async () => {
+      if (selectedAssignment === "all") {
+        // Fetch submissions for all assignments
+        const allSubmissions = [];
+        if (assignments) {
+          for (const assignment of assignments) {
+            const response = await fetch(`/api/assignments/${assignment.id}/submissions`, {
+              credentials: "include",
+            });
+            if (response.ok) {
+              const assignmentSubmissions = await response.json();
+              // Add assignment info to each submission
+              assignmentSubmissions.forEach((sub: any) => {
+                sub.assignmentTitle = assignment.title;
+                sub.assignmentCourse = assignment.course;
+              });
+              allSubmissions.push(...assignmentSubmissions);
+            }
+          }
+        }
+        return allSubmissions;
+      } else {
+        // Fetch submissions for specific assignment
+        const response = await fetch(`/api/assignments/${selectedAssignment}/submissions`, {
+          credentials: "include",
+        });
+        if (response.ok) {
+          const assignmentSubmissions = await response.json();
+          const assignment = assignments?.find(a => a.id === selectedAssignment);
+          if (assignment) {
+            assignmentSubmissions.forEach((sub: any) => {
+              sub.assignmentTitle = assignment.title;
+              sub.assignmentCourse = assignment.course;
+            });
+          }
+          return assignmentSubmissions;
+        }
+        return [];
+      }
+    },
+    enabled: !!assignments,
+  });
+
+  // Filter submissions based on search query
+  const filteredSubmissions = submissions?.filter((submission: Submission) =>
+    submission.studentName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    submission.studentId.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    (submission.assignmentTitle && submission.assignmentTitle.toLowerCase().includes(searchQuery.toLowerCase()))
+  ) || [];
 
   const getStatusIcon = (isGraded: boolean) => {
     if (isGraded) {
@@ -70,7 +137,14 @@ export default function Submissions() {
         </div>
       </div>
 
-      {submissions.length === 0 ? (
+      {submissionsLoading ? (
+        <Card>
+          <CardContent className="flex flex-col items-center justify-center py-12">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+            <p className="text-muted-foreground mt-4">Loading submissions...</p>
+          </CardContent>
+        </Card>
+      ) : filteredSubmissions.length === 0 ? (
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-12">
             <FileText className="h-12 w-12 text-muted-foreground mb-4" />
@@ -79,7 +153,11 @@ export default function Submissions() {
               Students haven't submitted any work yet, or you haven't created any assignments.
             </p>
             <div className="flex space-x-2">
-              <Button variant="outline" data-testid="button-upload-submissions">
+              <Button 
+                variant="outline" 
+                onClick={() => setUploadModalOpen(true)}
+                data-testid="button-upload-submissions"
+              >
                 Upload Submissions
               </Button>
               <Button data-testid="button-create-assignment-from-submissions">
@@ -90,7 +168,7 @@ export default function Submissions() {
         </Card>
       ) : (
         <div className="space-y-4">
-          {submissions.map((submission) => (
+          {filteredSubmissions.map((submission: Submission) => (
             <Card key={submission.id} className="hover:shadow-md transition-shadow" data-testid={`card-submission-${submission.id}`}>
               <CardHeader className="pb-3">
                 <div className="flex items-center justify-between">
@@ -141,6 +219,11 @@ export default function Submissions() {
           ))}
         </div>
       )}
+      
+      <UploadModal 
+        open={uploadModalOpen} 
+        onOpenChange={setUploadModalOpen} 
+      />
     </div>
   );
 }

@@ -38,11 +38,11 @@ export const gradingResults = pgTable("grading_results", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   submissionId: varchar("submission_id").notNull().references(() => submissions.id),
   aiAnalysis: jsonb("ai_analysis").notNull().$type<{
+    grade: string;
     score: number;
     maxScore: number;
     percentage: number;
     feedback: string;
-    strengths: string[];
     improvements: string[];
     reasoning: string;
   }>(),
