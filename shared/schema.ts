@@ -16,10 +16,11 @@ export const assignments = pgTable("assignments", {
   title: text("title").notNull(),
   course: text("course").notNull(),
   description: text("description"),
-  questions: jsonb("questions").notNull().$type<Array<{
+  caseStudyPrompt: text("case_study_prompt").notNull(),
+  evaluationCriteria: jsonb("evaluation_criteria").notNull().$type<Array<{
     id: string;
-    question: string;
-    expectedAnswer: string;
+    criterion: string;
+    description: string;
     points: number;
   }>>(),
   totalPoints: integer("total_points").notNull(),
@@ -46,8 +47,8 @@ export const gradingResults = pgTable("grading_results", {
     overallScore: number;
     maxScore: number;
     percentage: number;
-    questionScores: Array<{
-      questionId: string;
+    criteriaScores: Array<{
+      criterionId: string;
       score: number;
       maxScore: number;
       feedback: string;
@@ -56,6 +57,9 @@ export const gradingResults = pgTable("grading_results", {
     generalFeedback: string;
     strengths: string[];
     improvements: string[];
+    analysisQuality: string;
+    conceptApplication: string;
+    criticalThinking: string;
   }>(),
   finalScore: integer("final_score").notNull(),
   maxScore: integer("max_score").notNull(),
