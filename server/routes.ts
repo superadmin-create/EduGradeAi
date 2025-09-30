@@ -197,6 +197,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Get single submission
+  app.get("/api/submissions/:id", async (req, res) => {
+    try {
+      const submission = await storage.getSubmission(req.params.id);
+      if (!submission) {
+        return res.status(404).json({ message: "Submission not found" });
+      }
+      res.json(submission);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch submission" });
+    }
+  });
+
   // Grading routes
   app.post("/api/submissions/:id/grade", async (req, res) => {
     try {

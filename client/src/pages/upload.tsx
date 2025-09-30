@@ -230,18 +230,19 @@ export default function UploadPage() {
               <Label>Upload File *</Label>
               <FileDropzone
                 onFilesSelected={handleFilesSelected}
-                selectedFiles={selectedFiles}
-                onRemoveFile={(index) => {
-                  setSelectedFiles(prev => prev.filter((_, i) => i !== index));
-                }}
-                accept={{
+                acceptedTypes={{
                   'application/pdf': ['.pdf'],
                   'application/msword': ['.doc'],
                   'application/vnd.openxmlformats-officedocument.wordprocessingml.document': ['.docx'],
                   'text/plain': ['.txt']
                 }}
-                maxFiles={1}
+                multiple={false}
               />
+              {selectedFiles.length > 0 && (
+                <div className="mt-2 p-3 bg-muted rounded-md">
+                  <p className="text-sm text-foreground">Selected: {selectedFiles[0].name}</p>
+                </div>
+              )}
             </div>
           ) : (
             <div className="space-y-2">

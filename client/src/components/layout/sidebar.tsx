@@ -13,6 +13,7 @@ import {
 const navigationItems = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
   { href: "/assignments", label: "Assignments", icon: FileText },
+  { href: "/upload", label: "Upload Submission", icon: Upload },
   { href: "/submissions", label: "Student Submissions", icon: Users },
   { href: "/grading-results", label: "Grading Results", icon: BarChart3 },
   { href: "/settings", label: "Settings", icon: Settings },

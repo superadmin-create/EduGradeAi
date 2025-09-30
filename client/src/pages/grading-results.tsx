@@ -1,215 +1,257 @@
-import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Search, BarChart3, Download, TrendingUp, TrendingDown, Minus } from "lucide-react";
-import { Input } from "@/components/ui/input";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useLocation } from "wouter";
+import { ArrowLeft, CheckCircle, TrendingUp, FileText, User, Calendar } from "lucide-react";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 
 export default function GradingResults() {
-  const [searchQuery, setSearchQuery] = useState("");
-  const [selectedAssignment, setSelectedAssignment] = useState<string>("all");
+  const [, setLocation] = useLocation();
+  const searchParams = new URLSearchParams(window.location.search);
+  const submissionId = searchParams.get('submissionId');
 
-  interface Assignment {
+  interface Submission {
     id: string;
-    title: string;
+    assignmentId: string;
+    studentName: string;
+    studentId: string;
+    content: string;
+    fileName?: string;
+    submittedAt: string;
+    isGraded: boolean;
+    assignmentTitle?: string;
   }
 
-  interface StatsData {
-    totalAssignments: number;
-    pendingGrading: number;
-    totalStudents: number;
-    averageGrade: number;
+  interface GradingResult {
+    id: string;
+    submissionId: string;
+    aiAnalysis: {
+      grade: string;
+      score: number;
+      maxScore: number;
+      percentage: number;
+      feedback: string;
+      improvements: string[];
+      reasoning: string;
+    };
+    finalScore: number;
+    maxScore: number;
+    percentage: number;
+    feedback: string;
+    createdAt: string;
   }
 
-  const { data: assignments } = useQuery<Assignment[]>({
-    queryKey: ["/api/assignments"],
+  const { data: submission, isLoading: submissionLoading } = useQuery<Submission>({
+    queryKey: [`/api/submissions/${submissionId}`],
+    enabled: !!submissionId,
   });
 
-  const { data: stats } = useQuery<StatsData>({
-    queryKey: ["/api/stats"],
+  const { data: gradingResult, isLoading: gradingLoading } = useQuery<GradingResult>({
+    queryKey: [`/api/submissions/${submissionId}/result`],
+    enabled: !!submissionId,
   });
 
-  // For demo purposes, we'll show empty state
-  // In real implementation, you'd fetch grading results
-  const gradingResults: any[] = [];
-
-  const getTrendIcon = (change: number) => {
-    if (change > 0) return <TrendingUp className="h-4 w-4 text-accent" />;
-    if (change < 0) return <TrendingDown className="h-4 w-4 text-destructive" />;
-    return <Minus className="h-4 w-4 text-muted-foreground" />;
-  };
-
-  const overviewStats = [
-    {
-      title: "Total Graded",
-      value: "0",
-      change: 0,
-      description: "assignments graded"
-    },
-    {
-      title: "Average Score",
-      value: `${stats?.averageGrade || 0}%`,
-      change: 3.2,
-      description: "across all assignments"
-    },
-    {
-      title: "Completion Rate",
-      value: "0%",
-      change: 0,
-      description: "submission rate"
-    },
-    {
-      title: "AI Accuracy",
-      value: "95%",
-      change: 2.1,
-      description: "grading confidence"
-    }
-  ];
-
-  return (
-    <div className="space-y-6">
-      {/* Overview Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        {overviewStats.map((stat, index) => (
-          <Card key={index} data-testid={`stat-card-${stat.title.toLowerCase().replace(/\s+/g, '-')}`}>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
-                {stat.title}
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="flex items-center justify-between">
-                <div>
-                  <div className="text-2xl font-bold text-foreground">{stat.value}</div>
-                  <p className="text-xs text-muted-foreground">{stat.description}</p>
-                </div>
-                <div className="flex items-center space-x-1">
-                  {getTrendIcon(stat.change)}
-                  <span className={`text-xs ${
-                    stat.change > 0 ? 'text-accent' : 
-                    stat.change < 0 ? 'text-destructive' : 
-                    'text-muted-foreground'
-                  }`}>
-                    {stat.change > 0 ? '+' : ''}{stat.change}%
-                  </span>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-
-      {/* Filters and Actions */}
-      <div className="flex items-center justify-between flex-wrap gap-4">
-        <div className="flex items-center space-x-4">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
-            <Input
-              placeholder="Search results..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-10 w-64"
-              data-testid="input-search-results"
-            />
-          </div>
-          
-          <Select value={selectedAssignment} onValueChange={setSelectedAssignment}>
-            <SelectTrigger className="w-48" data-testid="select-filter-assignment">
-              <SelectValue placeholder="Filter by assignment" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Assignments</SelectItem>
-              {assignments?.map((assignment) => (
-                <SelectItem key={assignment.id} value={assignment.id}>
-                  {assignment.title}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-
-        <Button variant="outline" data-testid="button-export-results">
-          <Download className="mr-2 h-4 w-4" />
-          Export Results
-        </Button>
-      </div>
-
-      {/* Results Content */}
-      {gradingResults.length === 0 ? (
+  if (!submissionId) {
+    return (
+      <div className="space-y-6">
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-12">
-            <BarChart3 className="h-12 w-12 text-muted-foreground mb-4" />
-            <h3 className="text-lg font-semibold text-foreground mb-2">No grading results available</h3>
+            <FileText className="h-12 w-12 text-muted-foreground mb-4" />
+            <h3 className="text-lg font-semibold text-foreground mb-2">No submission selected</h3>
             <p className="text-muted-foreground text-center mb-4">
-              Start grading assignments to see detailed analytics and results here.
+              Please select a submission from the submissions page to view grading results.
             </p>
-            <div className="flex space-x-2">
-              <Button variant="outline" data-testid="button-upload-for-grading">
-                Upload Assignments
-              </Button>
-              <Button data-testid="button-start-grading">
-                Start Grading
-              </Button>
+            <Button onClick={() => setLocation('/submissions')} data-testid="button-go-to-submissions">
+              View Submissions
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  if (submissionLoading || gradingLoading) {
+    return (
+      <div className="space-y-6">
+        <Card>
+          <CardContent className="flex flex-col items-center justify-center py-12">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+            <p className="text-muted-foreground mt-4">Loading grading results...</p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  if (!submission || !gradingResult) {
+    return (
+      <div className="space-y-6">
+        <Card>
+          <CardContent className="flex flex-col items-center justify-center py-12">
+            <FileText className="h-12 w-12 text-muted-foreground mb-4" />
+            <h3 className="text-lg font-semibold text-foreground mb-2">No grading results found</h3>
+            <p className="text-muted-foreground text-center mb-4">
+              This submission hasn't been graded yet or the results are not available.
+            </p>
+            <Button onClick={() => setLocation('/submissions')} data-testid="button-back-to-submissions">
+              Back to Submissions
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  const analysis = gradingResult.aiAnalysis;
+  const getGradeColor = (grade: string) => {
+    const letter = grade.charAt(0);
+    if (letter === 'A') return 'text-accent';
+    if (letter === 'B') return 'text-blue-500';
+    if (letter === 'C') return 'text-yellow-500';
+    if (letter === 'D') return 'text-orange-500';
+    return 'text-destructive';
+  };
+
+  return (
+    <div className="space-y-6 max-w-5xl mx-auto">
+      {/* Back Button */}
+      <Button 
+        variant="ghost" 
+        onClick={() => setLocation('/submissions')}
+        data-testid="button-back"
+      >
+        <ArrowLeft className="mr-2 h-4 w-4" />
+        Back to Submissions
+      </Button>
+
+      {/* Student Info Header */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="text-2xl">{submission.studentName}</CardTitle>
+              <CardDescription className="mt-2 space-y-1">
+                <div className="flex items-center text-sm">
+                  <User className="mr-2 h-4 w-4" />
+                  Student ID: {submission.studentId}
+                </div>
+                <div className="flex items-center text-sm">
+                  <Calendar className="mr-2 h-4 w-4" />
+                  Submitted: {new Date(submission.submittedAt).toLocaleString()}
+                </div>
+              </CardDescription>
+            </div>
+            <Badge className="bg-accent/10 text-accent border-accent/20 text-lg px-4 py-2">
+              <CheckCircle className="mr-2 h-5 w-5" />
+              Graded
+            </Badge>
+          </div>
+        </CardHeader>
+      </Card>
+
+      {/* Grade Overview */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm font-medium text-muted-foreground">Final Grade</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className={`text-4xl font-bold ${getGradeColor(analysis.grade)}`}>
+              {analysis.grade}
             </div>
           </CardContent>
         </Card>
-      ) : (
-        <div className="space-y-6">
-          {/* Grade Distribution */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Grade Distribution</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                {['A (90-100%)', 'B (80-89%)', 'C (70-79%)', 'D (60-69%)', 'F (0-59%)'].map((grade, index) => (
-                  <div key={grade} className="flex items-center space-x-4">
-                    <div className="w-20 text-sm font-medium text-foreground">{grade}</div>
-                    <div className="flex-1">
-                      <Progress value={Math.random() * 100} className="h-2" />
-                    </div>
-                    <div className="w-12 text-sm text-muted-foreground text-right">
-                      {Math.floor(Math.random() * 50)}%
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
 
-          {/* Individual Results */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Individual Results</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                {gradingResults.map((result) => (
-                  <div key={result.id} className="flex items-center justify-between p-4 border border-border rounded-lg">
-                    <div className="flex items-center space-x-4">
-                      <div>
-                        <p className="font-medium text-foreground">{result.studentName}</p>
-                        <p className="text-sm text-muted-foreground">{result.assignmentTitle}</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center space-x-4">
-                      <div className="text-right">
-                        <p className="font-medium text-foreground">{result.percentage}%</p>
-                        <p className="text-sm text-muted-foreground">{result.finalScore}/{result.maxScore}</p>
-                      </div>
-                      <Button variant="outline" size="sm">
-                        View Details
-                      </Button>
-                    </div>
-                  </div>
-                ))}
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm font-medium text-muted-foreground">Score</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-4xl font-bold text-foreground">
+              {analysis.score}/{analysis.maxScore}
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm font-medium text-muted-foreground">Percentage</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              <div className="text-4xl font-bold text-foreground">
+                {analysis.percentage}%
               </div>
-            </CardContent>
-          </Card>
-        </div>
+              <Progress value={analysis.percentage} className="h-2" />
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Feedback */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center">
+            <TrendingUp className="mr-2 h-5 w-5 text-accent" />
+            Feedback
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-foreground leading-relaxed">{analysis.feedback}</p>
+        </CardContent>
+      </Card>
+
+      {/* AI Reasoning */}
+      {analysis.reasoning && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Grading Reasoning</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-muted-foreground leading-relaxed">{analysis.reasoning}</p>
+          </CardContent>
+        </Card>
       )}
+
+      {/* Improvements */}
+      {analysis.improvements && analysis.improvements.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Areas for Improvement</CardTitle>
+            <CardDescription>Suggestions to enhance future submissions</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ul className="space-y-3">
+              {analysis.improvements.map((improvement, index) => (
+                <li key={index} className="flex items-start">
+                  <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-primary/10 text-primary text-sm font-medium mr-3 mt-0.5">
+                    {index + 1}
+                  </span>
+                  <span className="text-foreground flex-1">{improvement}</span>
+                </li>
+              ))}
+            </ul>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Student's Submission */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Student's Submission</CardTitle>
+          <CardDescription>
+            {submission.fileName || 'Text submission'}
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="p-4 bg-muted rounded-lg">
+            <p className="text-foreground whitespace-pre-wrap leading-relaxed">
+              {submission.content}
+            </p>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }

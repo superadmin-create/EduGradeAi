@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { useLocation } from "wouter";
 import { Search, FileText, User, Calendar, CheckCircle, Clock, AlertCircle } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -9,8 +10,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import UploadModal from "@/components/submissions/upload-modal";
 
 export default function Submissions() {
+  const [, setLocation] = useLocation();
+  const searchParams = new URLSearchParams(window.location.search);
+  const assignmentFromQuery = searchParams.get('assignment') || "all";
+  
   const [searchQuery, setSearchQuery] = useState("");
-  const [selectedAssignment, setSelectedAssignment] = useState<string>("all");
+  const [selectedAssignment, setSelectedAssignment] = useState<string>(assignmentFromQuery);
   const [uploadModalOpen, setUploadModalOpen] = useState(false);
 
   interface Assignment {
@@ -130,7 +135,7 @@ export default function Submissions() {
         </div>
         
         <Button 
-          onClick={() => setUploadModalOpen(true)}
+          onClick={() => setLocation('/upload')}
           data-testid="button-upload-submissions-header"
         >
           Upload Submissions
@@ -155,12 +160,15 @@ export default function Submissions() {
             <div className="flex space-x-2">
               <Button 
                 variant="outline" 
-                onClick={() => setUploadModalOpen(true)}
+                onClick={() => setLocation('/upload')}
                 data-testid="button-upload-submissions"
               >
                 Upload Submissions
               </Button>
-              <Button data-testid="button-create-assignment-from-submissions">
+              <Button 
+                onClick={() => setLocation('/assignments')}
+                data-testid="button-create-assignment-from-submissions"
+              >
                 Create Assignment
               </Button>
             </div>
@@ -181,7 +189,12 @@ export default function Submissions() {
                     </div>
                     {getStatusBadge(submission.isGraded)}
                   </div>
-                  <Button variant="outline" size="sm" data-testid={`button-view-submission-${submission.id}`}>
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    onClick={() => setLocation(`/grading-results?submissionId=${submission.id}`)}
+                    data-testid={`button-view-submission-${submission.id}`}
+                  >
                     View Details
                   </Button>
                 </div>

@@ -8,6 +8,7 @@ import Header from "@/components/layout/header";
 import Dashboard from "@/pages/dashboard";
 import Assignments from "@/pages/assignments";
 import Submissions from "@/pages/submissions";
+import UploadPage from "@/pages/upload";
 import GradingResults from "@/pages/grading-results";
 import NotFound from "@/pages/not-found";
 
@@ -22,6 +23,7 @@ function Router() {
             <Route path="/" component={Dashboard} />
             <Route path="/assignments" component={Assignments} />
             <Route path="/submissions" component={Submissions} />
+            <Route path="/upload" component={UploadPage} />
             <Route path="/grading-results" component={GradingResults} />
             <Route component={NotFound} />
           </Switch>

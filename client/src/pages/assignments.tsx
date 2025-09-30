@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useLocation } from "wouter";
 import { Plus, Search, FileText, Users, Calendar, MoreHorizontal, Trash2, Edit } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -19,12 +20,38 @@ interface Assignment {
 }
 
 export default function Assignments() {
+  const [, setLocation] = useLocation();
   const [searchQuery, setSearchQuery] = useState("");
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
   const { data: assignments, isLoading } = useQuery<Assignment[]>({
     queryKey: ["/api/assignments"],
+  });
+
+  // Fetch submission counts for all assignments
+  const { data: submissionCounts = {} } = useQuery<Record<string, number>>({
+    queryKey: ["/api/assignments", "submission-counts"],
+    queryFn: async () => {
+      if (!assignments) return {};
+      
+      const counts: Record<string, number> = {};
+      
+      for (const assignment of assignments) {
+        const response = await fetch(`/api/assignments/${assignment.id}/submissions`, {
+          credentials: "include",
+        });
+        if (response.ok) {
+          const submissions = await response.json();
+          counts[assignment.id] = submissions.length;
+        } else {
+          counts[assignment.id] = 0;
+        }
+      }
+      
+      return counts;
+    },
+    enabled: !!assignments && assignments.length > 0,
   });
 
   const deleteAssignmentMutation = useMutation({
@@ -165,9 +192,13 @@ export default function Assignments() {
                   </div>
                   
                   <div className="space-y-2">
-                    <div className="flex items-center text-sm text-muted-foreground">
+                    <div 
+                      className="flex items-center text-sm text-muted-foreground cursor-pointer hover:text-foreground transition-colors"
+                      onClick={() => setLocation(`/submissions?assignment=${assignment.id}`)}
+                      data-testid={`link-submissions-${assignment.id}`}
+                    >
                       <Users className="mr-2 w-4 h-4" />
-                      <span>0 submissions</span>
+                      <span>{submissionCounts[assignment.id] || 0} submissions</span>
                     </div>
                     
                     <div className="flex items-center text-sm text-muted-foreground">
