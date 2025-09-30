@@ -5,14 +5,12 @@ import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Form, FormControl, FormField, FormItem, FormLabel } from "@/components/ui/form";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 
 const assignmentSchema = z.object({
   title: z.string().min(1, "Title is required"),
-  course: z.string().min(1, "Course is required"),
   description: z.string().optional(),
   caseStudyContent: z.string().min(1, "Case study content is required"),
   maxPoints: z.number().min(1).max(1000),
@@ -28,7 +26,6 @@ export default function AssignmentUpload() {
     resolver: zodResolver(assignmentSchema),
     defaultValues: {
       title: "",
-      course: "",
       description: "",
       caseStudyContent: "",
       maxPoints: 100,
@@ -81,28 +78,6 @@ export default function AssignmentUpload() {
                     data-testid="input-assignment-title"
                   />
                 </FormControl>
-              </FormItem>
-            )}
-          />
-
-          <FormField
-            control={form.control}
-            name="course"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Course</FormLabel>
-                <Select onValueChange={field.onChange} value={field.value}>
-                  <FormControl>
-                    <SelectTrigger data-testid="select-course">
-                      <SelectValue placeholder="Select course..." />
-                    </SelectTrigger>
-                  </FormControl>
-                  <SelectContent>
-                    <SelectItem value="cs101">Computer Science 101</SelectItem>
-                    <SelectItem value="advanced-programming">Advanced Programming</SelectItem>
-                    <SelectItem value="data-structures">Data Structures</SelectItem>
-                  </SelectContent>
-                </Select>
               </FormItem>
             )}
           />

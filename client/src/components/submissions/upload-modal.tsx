@@ -13,7 +13,6 @@ import FileDropzone from "@/components/ui/file-dropzone";
 interface Assignment {
   id: string;
   title: string;
-  course: string;
 }
 
 interface UploadModalProps {
@@ -165,7 +164,7 @@ export default function UploadModal({ open, onOpenChange }: UploadModalProps) {
               <SelectContent>
                 {assignments?.map((assignment) => (
                   <SelectItem key={assignment.id} value={assignment.id}>
-                    {assignment.title} - {assignment.course}
+                    {assignment.title}
                   </SelectItem>
                 ))}
               </SelectContent>

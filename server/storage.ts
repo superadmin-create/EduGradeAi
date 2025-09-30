@@ -86,7 +86,6 @@ export class MemStorage implements IStorage {
     const assignment: Assignment = {
       id,
       title: insertAssignment.title,
-      course: insertAssignment.course,
       description: insertAssignment.description || null,
       caseStudyContent: insertAssignment.caseStudyContent,
       maxPoints: insertAssignment.maxPoints,

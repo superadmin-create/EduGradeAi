@@ -1,13 +1,12 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "wouter";
-import { Book, Users, Calendar, ArrowRight } from "lucide-react";
+import { Users, Calendar, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 
 interface Assignment {
   id: string;
   title: string;
-  course: string;
   createdAt: string;
   maxPoints: number;
   caseStudyContent: string;
@@ -97,11 +96,6 @@ export default function RecentAssignments() {
               </div>
               
               <div className="space-y-2">
-                <div className="flex items-center text-sm text-muted-foreground">
-                  <Book className="mr-2 w-4 h-4" />
-                  <span>{assignment.course}</span>
-                </div>
-                
                 <div className="flex items-center text-sm text-muted-foreground">
                   <Users className="mr-2 w-4 h-4" />
                   <span>0 submissions</span>

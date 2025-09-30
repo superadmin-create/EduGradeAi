@@ -14,7 +14,6 @@ export const users = pgTable("users", {
 export const assignments = pgTable("assignments", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   title: text("title").notNull(),
-  course: text("course").notNull(),
   description: text("description"),
   caseStudyContent: text("case_study_content").notNull(),
   maxPoints: integer("max_points").notNull().default(100),

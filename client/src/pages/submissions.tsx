@@ -16,7 +16,6 @@ export default function Submissions() {
   interface Assignment {
     id: string;
     title: string;
-    course: string;
   }
 
   interface Submission {
@@ -29,10 +28,6 @@ export default function Submissions() {
     submittedAt: string;
     isGraded: boolean;
     assignmentTitle?: string;
-    assignmentCourse?: string;
-    score?: number;
-    maxScore?: number;
-    percentage?: number;
   }
 
   const { data: assignments } = useQuery<Assignment[]>({
@@ -56,7 +51,6 @@ export default function Submissions() {
               // Add assignment info to each submission
               assignmentSubmissions.forEach((sub: any) => {
                 sub.assignmentTitle = assignment.title;
-                sub.assignmentCourse = assignment.course;
               });
               allSubmissions.push(...assignmentSubmissions);
             }
@@ -74,7 +68,6 @@ export default function Submissions() {
           if (assignment) {
             assignmentSubmissions.forEach((sub: any) => {
               sub.assignmentTitle = assignment.title;
-              sub.assignmentCourse = assignment.course;
             });
           }
           return assignmentSubmissions;
@@ -203,17 +196,6 @@ export default function Submissions() {
                     <span>Submitted {new Date(submission.submittedAt).toLocaleDateString()}</span>
                   </div>
                 </div>
-                
-                {submission.isGraded && (
-                  <div className="mt-4 p-3 bg-accent/5 rounded-lg">
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm font-medium text-foreground">Score</span>
-                      <span className="text-lg font-bold text-accent">
-                        {submission.score}/{submission.maxScore} ({submission.percentage}%)
-                      </span>
-                    </div>
-                  </div>
-                )}
               </CardContent>
             </Card>
           ))}

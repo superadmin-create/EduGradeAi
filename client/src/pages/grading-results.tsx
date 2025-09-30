@@ -14,7 +14,6 @@ export default function GradingResults() {
   interface Assignment {
     id: string;
     title: string;
-    course: string;
   }
 
   interface StatsData {

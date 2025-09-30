@@ -12,7 +12,6 @@ import { apiRequest } from "@/lib/queryClient";
 interface Assignment {
   id: string;
   title: string;
-  course: string;
   createdAt: string;
   maxPoints: number;
   caseStudyContent: string;
@@ -50,8 +49,7 @@ export default function Assignments() {
   });
 
   const filteredAssignments = assignments?.filter((assignment) =>
-    assignment.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    assignment.course.toLowerCase().includes(searchQuery.toLowerCase())
+    assignment.title.toLowerCase().includes(searchQuery.toLowerCase())
   ) || [];
 
   const handleDeleteAssignment = (id: string) => {
@@ -132,7 +130,6 @@ export default function Assignments() {
                     <CardTitle className="text-lg font-semibold text-foreground truncate">
                       {assignment.title}
                     </CardTitle>
-                    <p className="text-sm text-muted-foreground mt-1">{assignment.course}</p>
                   </div>
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>

@@ -24,7 +24,6 @@ export default function BatchUpload() {
   interface Assignment {
     id: string;
     title: string;
-    course: string;
   }
 
   const batchUploadMutation = useMutation({
@@ -148,7 +147,7 @@ export default function BatchUpload() {
             <SelectContent>
               {assignments?.map((assignment) => (
                 <SelectItem key={assignment.id} value={assignment.id}>
-                  {assignment.title} - {assignment.course}
+                  {assignment.title}
                 </SelectItem>
               ))}
             </SelectContent>
