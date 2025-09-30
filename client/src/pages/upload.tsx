@@ -69,6 +69,7 @@ export default function UploadPage() {
       });
       resetForm();
       queryClient.invalidateQueries({ queryKey: ["/api/assignments"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/assignments", "submission-counts"] });
       queryClient.invalidateQueries({ queryKey: ["/api/stats"] });
       setLocation("/submissions");
     },
