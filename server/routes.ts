@@ -112,6 +112,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
 
       const submission = await storage.createSubmission(validatedData);
+
+      // Automatically grade the submission
+      const assignment = await storage.getAssignment(req.params.id);
+      if (assignment) {
+        try {
+          const gradingResult = await gradeAssignment({
+            caseStudyContent: assignment.caseStudyContent,
+            studentResponse: submission.content,
+            maxPoints: assignment.maxPoints,
+            assignmentTitle: assignment.title,
+          });
+
+          await storage.createGradingResult({
+            submissionId: submission.id,
+            aiAnalysis: gradingResult,
+            finalScore: gradingResult.score,
+            maxScore: gradingResult.maxScore,
+            percentage: gradingResult.percentage,
+            feedback: gradingResult.feedback,
+          });
+        } catch (gradingError) {
+          console.error("Failed to auto-grade submission:", gradingError);
+          // Continue even if grading fails - submission is still saved
+        }
+      }
+
       res.status(201).json(submission);
     } catch (error) {
       res.status(400).json({ message: "Failed to create submission", error: (error as Error).message });
