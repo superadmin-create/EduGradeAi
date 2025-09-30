@@ -128,6 +128,13 @@ export default function Submissions() {
             </SelectContent>
           </Select>
         </div>
+        
+        <Button 
+          onClick={() => setUploadModalOpen(true)}
+          data-testid="button-upload-submissions-header"
+        >
+          Upload Submissions
+        </Button>
       </div>
 
       {submissionsLoading ? (

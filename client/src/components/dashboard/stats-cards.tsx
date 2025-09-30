@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { FileText, Clock, Users, TrendingUp } from "lucide-react";
+import { useLocation } from "wouter";
 
 interface StatCard {
   label: string;
@@ -7,6 +8,7 @@ interface StatCard {
   change: string;
   changeType: 'positive' | 'negative' | 'neutral';
   icon: React.ComponentType<any>;
+  navigateTo: string;
 }
 
 interface StatsData {
@@ -17,6 +19,7 @@ interface StatsData {
 }
 
 export default function StatsCards() {
+  const [, setLocation] = useLocation();
   const { data: stats, isLoading } = useQuery<StatsData>({
     queryKey: ["/api/stats"],
   });
@@ -47,6 +50,7 @@ export default function StatsCards() {
       change: "+12% from last month",
       changeType: 'positive',
       icon: FileText,
+      navigateTo: "/assignments",
     },
     {
       label: "Pending Grading",
@@ -54,6 +58,7 @@ export default function StatsCards() {
       change: "Requires attention",
       changeType: (stats?.pendingGrading || 0) > 0 ? 'negative' : 'neutral',
       icon: Clock,
+      navigateTo: "/submissions",
     },
     {
       label: "Students",
@@ -61,6 +66,7 @@ export default function StatsCards() {
       change: "Active this semester",
       changeType: 'positive',
       icon: Users,
+      navigateTo: "/submissions",
     },
     {
       label: "Avg. Grade",
@@ -68,6 +74,7 @@ export default function StatsCards() {
       change: "+3.2% improvement",
       changeType: 'positive',
       icon: TrendingUp,
+      navigateTo: "/grading-results",
     },
   ];
 
@@ -76,7 +83,12 @@ export default function StatsCards() {
       {statsCards.map((card, index) => {
         const Icon = card.icon;
         return (
-          <div key={index} className="stat-card p-6 rounded-lg" data-testid={`stat-card-${card.label.toLowerCase().replace(/\s+/g, '-')}`}>
+          <div 
+            key={index} 
+            className="stat-card p-6 rounded-lg cursor-pointer hover:shadow-lg transition-shadow" 
+            data-testid={`stat-card-${card.label.toLowerCase().replace(/\s+/g, '-')}`}
+            onClick={() => setLocation(card.navigateTo)}
+          >
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-muted-foreground text-sm font-medium">{card.label}</p>
