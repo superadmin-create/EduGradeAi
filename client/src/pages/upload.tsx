@@ -256,10 +256,8 @@ export default function UploadPage() {
               <FileDropzone
                 onFilesSelected={handleFilesSelected}
                 acceptedTypes={{
-                  'application/pdf': ['.pdf'],
-                  'application/vnd.openxmlformats-officedocument.wordprocessingml.document': ['.docx'],
-                  'text/plain': ['.txt'],
-                  'text/markdown': ['.md']
+                  'application/*': ['.pdf', '.docx'],
+                  'text/*': ['.txt', '.md']
                 }}
                 multiple={true}
                 title="Drag and drop assignment files here"
