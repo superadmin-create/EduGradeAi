@@ -1,6 +1,7 @@
 import { randomUUID } from "crypto";
 import mammoth from "mammoth";
 import * as XLSX from "xlsx";
+import * as pdfjsLib from "pdfjs-dist/legacy/build/pdf.mjs";
 
 export interface ProcessedFile {
   id: string;
@@ -21,9 +22,18 @@ export async function processUploadedFile(
     if (mimeType.startsWith('text/') || originalName.match(/\.(txt|md)$/i)) {
       content = fileBuffer.toString('utf-8');
     } else if (originalName.match(/\.pdf$/i) || mimeType.includes('pdf')) {
-      const pdfParse = (await import('pdf-parse')).default;
-      const pdfData = await pdfParse(fileBuffer);
-      content = pdfData.text;
+      const loadingTask = pdfjsLib.getDocument({ data: new Uint8Array(fileBuffer) });
+      const pdfDocument = await loadingTask.promise;
+      const textParts: string[] = [];
+      
+      for (let pageNum = 1; pageNum <= pdfDocument.numPages; pageNum++) {
+        const page = await pdfDocument.getPage(pageNum);
+        const textContent = await page.getTextContent();
+        const pageText = textContent.items.map((item: any) => item.str).join(' ');
+        textParts.push(pageText);
+      }
+      
+      content = textParts.join('\n\n');
     } else if (originalName.match(/\.docx$/i) || mimeType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
       const result = await mammoth.extractRawText({ buffer: fileBuffer });
       content = result.value;
