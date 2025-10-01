@@ -17,7 +17,7 @@ interface Assignment {
 }
 
 export default function UploadPage() {
-  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [selectedAssignment, setSelectedAssignment] = useState<string>("");
   const [studentName, setStudentName] = useState("");
   const [studentId, setStudentId] = useState("");
@@ -83,7 +83,7 @@ export default function UploadPage() {
   });
 
   const resetForm = () => {
-    setSelectedFiles([]);
+    setSelectedFile(null);
     setSelectedAssignment("");
     setStudentName("");
     setStudentId("");
@@ -92,8 +92,17 @@ export default function UploadPage() {
   };
 
   const handleFilesSelected = (files: File[]) => {
-    setSelectedFiles(files);
-    if (files.length > 0) {
+    if (files.length > 1) {
+      toast({
+        title: "Multiple Files Not Supported",
+        description: "Please select only one file at a time",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    if (files.length === 1) {
+      setSelectedFile(files[0]);
       setUploadMode("file");
     }
   };
@@ -117,7 +126,7 @@ export default function UploadPage() {
       return;
     }
 
-    if (uploadMode === "file" && selectedFiles.length === 0) {
+    if (uploadMode === "file" && !selectedFile) {
       toast({
         title: "Error",
         description: "Please select a file to upload",
@@ -139,7 +148,7 @@ export default function UploadPage() {
       assignmentId: selectedAssignment,
       studentName,
       studentId,
-      file: uploadMode === "file" ? selectedFiles[0] : undefined,
+      file: uploadMode === "file" ? selectedFile : undefined,
       content: uploadMode === "text" ? textContent : undefined,
     });
   };
