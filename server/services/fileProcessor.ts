@@ -19,7 +19,7 @@ export async function processUploadedFile(
 
     if (mimeType.startsWith('text/') || originalName.match(/\.(txt|md)$/i)) {
       content = fileBuffer.toString('utf-8');
-    } else if (originalName.match(/\.pdf$/i) || mimeType === 'application/pdf') {
+    } else if (originalName.match(/\.pdf$/i) || mimeType.includes('pdf')) {
       const pdfParse = (await import('pdf-parse')).default;
       const pdfData = await pdfParse(fileBuffer);
       content = pdfData.text;
@@ -54,6 +54,8 @@ export function validateFileUpload(file: Express.Multer.File): void {
     'text/plain',
     'text/markdown',
     'application/pdf',
+    'application/x-pdf',
+    'application/octet-stream',
     'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
   ];
   
@@ -63,12 +65,15 @@ export function validateFileUpload(file: Express.Multer.File): void {
     throw new Error('File too large. Maximum size is 10MB.');
   }
 
-  const hasValidType = allowedTypes.includes(file.mimetype);
   const hasValidExtension = allowedExtensions.some(ext => 
     file.originalname.toLowerCase().endsWith(ext)
   );
+  
+  const hasValidType = allowedTypes.includes(file.mimetype) || 
+    (file.mimetype.includes('pdf') && hasValidExtension && file.originalname.toLowerCase().endsWith('.pdf'));
 
   if (!hasValidType && !hasValidExtension) {
+    console.error(`File validation failed - MIME type: ${file.mimetype}, filename: ${file.originalname}`);
     throw new Error('Invalid file type. Supported formats: PDF, DOCX, TXT, MD');
   }
 }
