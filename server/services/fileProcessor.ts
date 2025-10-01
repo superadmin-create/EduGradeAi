@@ -1,4 +1,5 @@
 import { randomUUID } from "crypto";
+import mammoth from "mammoth";
 
 export interface ProcessedFile {
   id: string;
@@ -16,16 +17,21 @@ export async function processUploadedFile(
   try {
     let content: string;
 
-    // For now, we'll handle text files directly
-    // In a production environment, you'd use libraries like pdf-parse for PDFs
     if (mimeType.startsWith('text/') || originalName.match(/\.(txt|md)$/i)) {
       content = fileBuffer.toString('utf-8');
-    } else if (originalName.match(/\.pdf$/i)) {
-      // For PDF files, we'll simulate text extraction
-      // In real implementation, use pdf-parse or similar library
-      content = fileBuffer.toString('utf-8');
+    } else if (originalName.match(/\.pdf$/i) || mimeType === 'application/pdf') {
+      const pdfParse = (await import('pdf-parse')).default;
+      const pdfData = await pdfParse(fileBuffer);
+      content = pdfData.text;
+    } else if (originalName.match(/\.docx$/i) || mimeType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
+      const result = await mammoth.extractRawText({ buffer: fileBuffer });
+      content = result.value;
     } else {
-      throw new Error(`Unsupported file type: ${mimeType}`);
+      throw new Error(`Unsupported file type: ${mimeType}. Supported formats: PDF, DOCX, TXT, MD`);
+    }
+
+    if (!content || content.trim().length === 0) {
+      throw new Error('No text content could be extracted from the file');
     }
 
     return {
@@ -48,10 +54,11 @@ export function validateFileUpload(file: Express.Multer.File): void {
     'text/plain',
     'application/pdf',
     'application/msword',
-    'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'application/vnd.oasis.opendocument.text'
   ];
   
-  const allowedExtensions = ['.txt', '.pdf', '.doc', '.docx', '.md'];
+  const allowedExtensions = ['.txt', '.pdf', '.doc', '.docx', '.odt', '.md'];
 
   if (file.size > maxSize) {
     throw new Error('File too large. Maximum size is 10MB.');
@@ -63,6 +70,6 @@ export function validateFileUpload(file: Express.Multer.File): void {
   );
 
   if (!hasValidType && !hasValidExtension) {
-    throw new Error('Invalid file type. Supported formats: PDF, DOC, DOCX, TXT');
+    throw new Error('Invalid file type. Supported formats: PDF, DOC, DOCX, ODT, TXT');
   }
 }
