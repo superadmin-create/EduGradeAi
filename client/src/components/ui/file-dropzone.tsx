@@ -53,6 +53,7 @@ export default function FileDropzone({
     maxSize,
     multiple,
     noClick: true,
+    useFsAccessApi: false,
   });
 
   return (

@@ -1,5 +1,6 @@
 import { randomUUID } from "crypto";
 import mammoth from "mammoth";
+import * as XLSX from "xlsx";
 
 export interface ProcessedFile {
   id: string;
@@ -26,8 +27,15 @@ export async function processUploadedFile(
     } else if (originalName.match(/\.docx$/i) || mimeType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
       const result = await mammoth.extractRawText({ buffer: fileBuffer });
       content = result.value;
+    } else if (originalName.match(/\.(xlsx|xls)$/i) || mimeType.includes('spreadsheet') || mimeType.includes('excel')) {
+      const workbook = XLSX.read(fileBuffer, { type: 'buffer' });
+      const sheets = workbook.SheetNames.map(sheetName => {
+        const sheet = workbook.Sheets[sheetName];
+        return XLSX.utils.sheet_to_txt(sheet);
+      });
+      content = sheets.join('\n\n');
     } else {
-      throw new Error(`Unsupported file type: ${mimeType}. Supported formats: PDF, DOCX, TXT, MD`);
+      throw new Error(`Unsupported file type: ${mimeType}. Supported formats: PDF, DOCX, XLSX, XLS, TXT, MD`);
     }
 
     if (!content || content.trim().length === 0) {
@@ -56,10 +64,12 @@ export function validateFileUpload(file: Express.Multer.File): void {
     'application/pdf',
     'application/x-pdf',
     'application/octet-stream',
-    'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    'application/vnd.ms-excel'
   ];
   
-  const allowedExtensions = ['.txt', '.md', '.pdf', '.docx'];
+  const allowedExtensions = ['.txt', '.md', '.pdf', '.docx', '.xlsx', '.xls'];
 
   if (file.size > maxSize) {
     throw new Error('File too large. Maximum size is 10MB.');
@@ -70,10 +80,12 @@ export function validateFileUpload(file: Express.Multer.File): void {
   );
   
   const hasValidType = allowedTypes.includes(file.mimetype) || 
-    (file.mimetype.includes('pdf') && hasValidExtension && file.originalname.toLowerCase().endsWith('.pdf'));
+    file.mimetype.includes('pdf') || 
+    file.mimetype.includes('spreadsheet') ||
+    file.mimetype.includes('excel');
 
   if (!hasValidType && !hasValidExtension) {
     console.error(`File validation failed - MIME type: ${file.mimetype}, filename: ${file.originalname}`);
-    throw new Error('Invalid file type. Supported formats: PDF, DOCX, TXT, MD');
+    throw new Error('Invalid file type. Supported formats: PDF, DOCX, XLSX, XLS, TXT, MD');
   }
 }
