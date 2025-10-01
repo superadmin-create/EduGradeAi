@@ -46,11 +46,11 @@ export default function Header() {
           
           <div className="flex items-center space-x-3">
             <div className="text-right">
-              <p className="text-sm font-medium text-foreground">Dr. Sarah Johnson</p>
+              <p className="text-sm font-medium text-foreground">Shaswat Srivastava</p>
               <p className="text-xs text-muted-foreground">Professor</p>
             </div>
             <div className="w-10 h-10 bg-primary rounded-full flex items-center justify-center text-primary-foreground font-medium">
-              SJ
+              SS
             </div>
           </div>
         </div>
