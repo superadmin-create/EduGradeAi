@@ -52,13 +52,12 @@ export function validateFileUpload(file: Express.Multer.File): void {
   const maxSize = 10 * 1024 * 1024; // 10MB
   const allowedTypes = [
     'text/plain',
+    'text/markdown',
     'application/pdf',
-    'application/msword',
-    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-    'application/vnd.oasis.opendocument.text'
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
   ];
   
-  const allowedExtensions = ['.txt', '.pdf', '.doc', '.docx', '.odt', '.md'];
+  const allowedExtensions = ['.txt', '.md', '.pdf', '.docx'];
 
   if (file.size > maxSize) {
     throw new Error('File too large. Maximum size is 10MB.');
@@ -70,6 +69,6 @@ export function validateFileUpload(file: Express.Multer.File): void {
   );
 
   if (!hasValidType && !hasValidExtension) {
-    throw new Error('Invalid file type. Supported formats: PDF, DOC, DOCX, ODT, TXT');
+    throw new Error('Invalid file type. Supported formats: PDF, DOCX, TXT, MD');
   }
 }

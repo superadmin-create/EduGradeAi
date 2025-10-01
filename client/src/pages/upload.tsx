@@ -17,7 +17,7 @@ interface Assignment {
 }
 
 export default function UploadPage() {
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [selectedAssignment, setSelectedAssignment] = useState<string>("");
   const [studentName, setStudentName] = useState("");
   const [studentId, setStudentId] = useState("");
@@ -36,36 +36,60 @@ export default function UploadPage() {
       assignmentId: string;
       studentName: string;
       studentId: string;
-      file?: File;
+      files?: File[];
       content?: string;
     }) => {
-      const formData = new FormData();
-      formData.append("studentName", data.studentName);
-      formData.append("studentId", data.studentId);
-      
-      if (data.file) {
-        formData.append("file", data.file);
+      // If uploading files, create one submission per file
+      if (data.files && data.files.length > 0) {
+        const results = [];
+        
+        for (const file of data.files) {
+          const formData = new FormData();
+          formData.append("studentName", data.studentName);
+          formData.append("studentId", data.studentId);
+          formData.append("file", file);
+          
+          const response = await fetch(`/api/assignments/${data.assignmentId}/submissions`, {
+            method: "POST",
+            body: formData,
+            credentials: "include",
+          });
+
+          if (!response.ok) {
+            const error = await response.text();
+            throw new Error(`Failed to upload ${file.name}: ${error}`);
+          }
+
+          results.push(await response.json());
+        }
+        
+        return results;
       } else if (data.content) {
+        // Text submission
+        const formData = new FormData();
+        formData.append("studentName", data.studentName);
+        formData.append("studentId", data.studentId);
         formData.append("content", data.content);
-      }
-      
-      const response = await fetch(`/api/assignments/${data.assignmentId}/submissions`, {
-        method: "POST",
-        body: formData,
-        credentials: "include",
-      });
+        
+        const response = await fetch(`/api/assignments/${data.assignmentId}/submissions`, {
+          method: "POST",
+          body: formData,
+          credentials: "include",
+        });
 
-      if (!response.ok) {
-        const error = await response.text();
-        throw new Error(error);
-      }
+        if (!response.ok) {
+          const error = await response.text();
+          throw new Error(error);
+        }
 
-      return response.json();
+        return [await response.json()];
+      }
     },
-    onSuccess: () => {
+    onSuccess: (results) => {
+      const count = results?.length || 0;
       toast({
         title: "Upload Complete",
-        description: "Submission uploaded successfully and AI grading started",
+        description: `${count} submission${count > 1 ? 's' : ''} uploaded successfully and AI grading started`,
       });
       resetForm();
       queryClient.invalidateQueries({ queryKey: ["/api/assignments"] });
@@ -83,7 +107,7 @@ export default function UploadPage() {
   });
 
   const resetForm = () => {
-    setSelectedFile(null);
+    setSelectedFiles([]);
     setSelectedAssignment("");
     setStudentName("");
     setStudentId("");
@@ -92,17 +116,8 @@ export default function UploadPage() {
   };
 
   const handleFilesSelected = (files: File[]) => {
-    if (files.length > 1) {
-      toast({
-        title: "Multiple Files Not Supported",
-        description: "Please select only one file at a time",
-        variant: "destructive",
-      });
-      return;
-    }
-    
-    if (files.length === 1) {
-      setSelectedFile(files[0]);
+    setSelectedFiles(files);
+    if (files.length > 0) {
       setUploadMode("file");
     }
   };
@@ -126,10 +141,10 @@ export default function UploadPage() {
       return;
     }
 
-    if (uploadMode === "file" && !selectedFile) {
+    if (uploadMode === "file" && selectedFiles.length === 0) {
       toast({
         title: "Error",
-        description: "Please select a file to upload",
+        description: "Please select at least one file to upload",
         variant: "destructive",
       });
       return;
@@ -148,7 +163,7 @@ export default function UploadPage() {
       assignmentId: selectedAssignment,
       studentName,
       studentId,
-      file: uploadMode === "file" ? selectedFile : undefined,
+      files: uploadMode === "file" ? selectedFiles : undefined,
       content: uploadMode === "text" ? textContent : undefined,
     });
   };
@@ -242,15 +257,24 @@ export default function UploadPage() {
                 onFilesSelected={handleFilesSelected}
                 acceptedTypes={{
                   'application/pdf': ['.pdf'],
-                  'application/msword': ['.doc'],
                   'application/vnd.openxmlformats-officedocument.wordprocessingml.document': ['.docx'],
-                  'text/plain': ['.txt']
+                  'text/plain': ['.txt'],
+                  'text/markdown': ['.md']
                 }}
-                multiple={false}
+                multiple={true}
+                title="Drag and drop assignment files here"
+                description="Supports PDF, DOCX, TXT, MD files up to 10MB. Select multiple files to create separate submissions."
               />
               {selectedFiles.length > 0 && (
-                <div className="mt-2 p-3 bg-muted rounded-md">
-                  <p className="text-sm text-foreground">Selected: {selectedFiles[0].name}</p>
+                <div className="mt-2 p-3 bg-muted rounded-md space-y-1">
+                  <p className="text-sm font-medium text-foreground mb-2">
+                    {selectedFiles.length} file{selectedFiles.length > 1 ? 's' : ''} selected:
+                  </p>
+                  {selectedFiles.map((file, index) => (
+                    <p key={index} className="text-sm text-muted-foreground">
+                      • {file.name}
+                    </p>
+                  ))}
                 </div>
               )}
             </div>
