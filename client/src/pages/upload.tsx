@@ -41,29 +41,37 @@ export default function UploadPage() {
     }) => {
       // If uploading files, create one submission per file
       if (data.files && data.files.length > 0) {
-        const results = [];
+        const successes: any[] = [];
+        const errors: { fileName: string; error: string }[] = [];
         
         for (const file of data.files) {
-          const formData = new FormData();
-          formData.append("studentName", data.studentName);
-          formData.append("studentId", data.studentId);
-          formData.append("file", file);
-          
-          const response = await fetch(`/api/assignments/${data.assignmentId}/submissions`, {
-            method: "POST",
-            body: formData,
-            credentials: "include",
-          });
+          try {
+            const formData = new FormData();
+            formData.append("studentName", data.studentName);
+            formData.append("studentId", data.studentId);
+            formData.append("file", file);
+            
+            const response = await fetch(`/api/assignments/${data.assignmentId}/submissions`, {
+              method: "POST",
+              body: formData,
+              credentials: "include",
+            });
 
-          if (!response.ok) {
-            const error = await response.text();
-            throw new Error(`Failed to upload ${file.name}: ${error}`);
+            if (!response.ok) {
+              const errorText = await response.text();
+              errors.push({ fileName: file.name, error: errorText });
+            } else {
+              successes.push(await response.json());
+            }
+          } catch (err) {
+            errors.push({ 
+              fileName: file.name, 
+              error: err instanceof Error ? err.message : "Unknown error occurred" 
+            });
           }
-
-          results.push(await response.json());
         }
         
-        return results;
+        return { successes, errors };
       } else if (data.content) {
         // Text submission
         const formData = new FormData();
@@ -82,20 +90,43 @@ export default function UploadPage() {
           throw new Error(error);
         }
 
-        return [await response.json()];
+        return { successes: [await response.json()], errors: [] };
       }
+      
+      return { successes: [], errors: [] };
     },
     onSuccess: (results) => {
-      const count = results?.length || 0;
-      toast({
-        title: "Upload Complete",
-        description: `${count} submission${count > 1 ? 's' : ''} uploaded successfully and AI grading started`,
-      });
-      resetForm();
-      queryClient.invalidateQueries({ queryKey: ["/api/assignments"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/assignments", "submission-counts"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/stats"] });
-      setLocation("/submissions");
+      const successCount = results?.successes.length || 0;
+      const errorCount = results?.errors.length || 0;
+      
+      if (successCount > 0 && errorCount === 0) {
+        toast({
+          title: "Upload Complete",
+          description: `Successfully uploaded ${successCount} submission${successCount > 1 ? 's' : ''} and AI grading started`,
+        });
+        resetForm();
+        queryClient.invalidateQueries({ queryKey: ["/api/assignments"] });
+        queryClient.invalidateQueries({ queryKey: ["/api/assignments", "submission-counts"] });
+        queryClient.invalidateQueries({ queryKey: ["/api/stats"] });
+        setLocation("/submissions");
+      } else if (successCount > 0 && errorCount > 0) {
+        const errorMessages = results.errors.map(e => `${e.fileName}: ${e.error}`).join('\n');
+        toast({
+          title: "Upload Complete",
+          description: `Successfully uploaded ${successCount} submission${successCount > 1 ? 's' : ''}. ${errorCount} error${errorCount > 1 ? 's' : ''}:\n${errorMessages}`,
+          variant: "destructive",
+        });
+        queryClient.invalidateQueries({ queryKey: ["/api/assignments"] });
+        queryClient.invalidateQueries({ queryKey: ["/api/assignments", "submission-counts"] });
+        queryClient.invalidateQueries({ queryKey: ["/api/stats"] });
+      } else {
+        const errorMessages = results.errors.map(e => `${e.fileName}: ${e.error}`).join('\n');
+        toast({
+          title: "Upload Failed",
+          description: `${errorMessages}`,
+          variant: "destructive",
+        });
+      }
     },
     onError: (error) => {
       toast({
