@@ -109,17 +109,12 @@ export default function BatchUpload() {
       
       <FileDropzone
         onFilesSelected={handleFilesSelected}
-        acceptedTypes={{
-          "application/pdf": [".pdf"],
-          "application/msword": [".doc"],
-          "application/vnd.openxmlformats-officedocument.wordprocessingml.document": [".docx"],
-          "text/plain": [".txt"],
-        }}
+        acceptedTypes={{}}
         maxSize={10 * 1024 * 1024}
         multiple={true}
         icon={<FileUp className="text-3xl text-muted-foreground mb-3" />}
         title="Upload Student Submissions"
-        description="Drop multiple files or select folder"
+        description="Supports PDF, DOCX, XLSX, XLS, CSV, TXT, MD files - Drop multiple files or select folder"
       />
       
       {selectedFiles.length > 0 && (
