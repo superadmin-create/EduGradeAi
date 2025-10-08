@@ -286,21 +286,10 @@ export default function UploadPage() {
               <Label>Upload File *</Label>
               <FileDropzone
                 onFilesSelected={handleFilesSelected}
-                acceptedTypes={{
-                  'application/pdf': ['.pdf'],
-                  'application/vnd.openxmlformats-officedocument.wordprocessingml.document': ['.docx'],
-                  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': ['.xlsx'],
-                  'application/vnd.ms-excel': ['.xls'],
-                  'application/x-msexcel': ['.xls'],
-                  'application/excel': ['.xls'],
-                  'application/x-excel': ['.xls', '.xlsx'],
-                  'text/plain': ['.txt'],
-                  'text/markdown': ['.md'],
-                  'text/csv': ['.csv']
-                }}
+                acceptedTypes={{}}
                 multiple={true}
                 title="Drag and drop assignment files here"
-                description="Supports PDF, DOCX, XLSX, XLS, TXT, MD files up to 10MB. Select multiple files to create separate submissions."
+                description="Supports PDF, DOCX, XLSX, XLS, CSV, TXT, MD files up to 10MB. Select multiple files to create separate submissions."
               />
               {selectedFiles.length > 0 && (
                 <div className="mt-2 p-3 bg-muted rounded-md space-y-1">
