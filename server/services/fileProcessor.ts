@@ -37,7 +37,7 @@ export async function processUploadedFile(
     } else if (originalName.match(/\.docx$/i) || mimeType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
       const result = await mammoth.extractRawText({ buffer: fileBuffer });
       content = result.value;
-    } else if (originalName.match(/\.(xlsx|xls)$/i) || mimeType.includes('spreadsheet') || mimeType.includes('excel')) {
+    } else if (originalName.match(/\.(xlsx|xls|csv)$/i) || mimeType.includes('spreadsheet') || mimeType.includes('excel') || mimeType.includes('csv')) {
       const workbook = XLSX.read(fileBuffer, { type: 'buffer' });
       const sheets = workbook.SheetNames.map(sheetName => {
         const sheet = workbook.Sheets[sheetName];
@@ -45,7 +45,7 @@ export async function processUploadedFile(
       });
       content = sheets.join('\n\n');
     } else {
-      throw new Error(`Unsupported file type: ${mimeType}. Supported formats: PDF, DOCX, XLSX, XLS, TXT, MD`);
+      throw new Error(`Unsupported file type: ${mimeType}. Supported formats: PDF, DOCX, XLSX, XLS, CSV, TXT, MD`);
     }
 
     if (!content || content.trim().length === 0) {
@@ -71,15 +71,19 @@ export function validateFileUpload(file: Express.Multer.File): void {
   const allowedTypes = [
     'text/plain',
     'text/markdown',
+    'text/csv',
     'application/pdf',
     'application/x-pdf',
     'application/octet-stream',
     'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
     'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-    'application/vnd.ms-excel'
+    'application/vnd.ms-excel',
+    'application/x-msexcel',
+    'application/excel',
+    'application/x-excel'
   ];
   
-  const allowedExtensions = ['.txt', '.md', '.pdf', '.docx', '.xlsx', '.xls'];
+  const allowedExtensions = ['.txt', '.md', '.pdf', '.docx', '.xlsx', '.xls', '.csv'];
 
   if (file.size > maxSize) {
     throw new Error('File too large. Maximum size is 10MB.');
@@ -96,6 +100,6 @@ export function validateFileUpload(file: Express.Multer.File): void {
 
   if (!hasValidType && !hasValidExtension) {
     console.error(`File validation failed - MIME type: ${file.mimetype}, filename: ${file.originalname}`);
-    throw new Error('Invalid file type. Supported formats: PDF, DOCX, XLSX, XLS, TXT, MD');
+    throw new Error('Invalid file type. Supported formats: PDF, DOCX, XLSX, XLS, CSV, TXT, MD');
   }
 }

@@ -291,8 +291,12 @@ export default function UploadPage() {
                   'application/vnd.openxmlformats-officedocument.wordprocessingml.document': ['.docx'],
                   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': ['.xlsx'],
                   'application/vnd.ms-excel': ['.xls'],
+                  'application/x-msexcel': ['.xls'],
+                  'application/excel': ['.xls'],
+                  'application/x-excel': ['.xls', '.xlsx'],
                   'text/plain': ['.txt'],
-                  'text/markdown': ['.md']
+                  'text/markdown': ['.md'],
+                  'text/csv': ['.csv']
                 }}
                 multiple={true}
                 title="Drag and drop assignment files here"
