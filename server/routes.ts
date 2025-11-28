@@ -5,6 +5,9 @@ import { storage } from "./storage";
 import { insertAssignmentSchema, insertSubmissionSchema } from "@shared/schema";
 import { gradeAssignment } from "./services/openai";
 import { processUploadedFile, validateFileUpload } from "./services/fileProcessor";
+import { db } from "./db";
+import { users } from "@shared/schema";
+import { eq } from "drizzle-orm";
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -13,7 +16,23 @@ const upload = multer({
   },
 });
 
+async function initializeDefaultUser() {
+  const existingUser = await db.select().from(users).where(eq(users.id, "default-user")).limit(1);
+  
+  if (existingUser.length === 0) {
+    await db.insert(users).values({
+      id: "default-user",
+      username: "professor",
+      password: "demo",
+      name: "Shaswat Srivastava",
+      role: "professor"
+    });
+    console.log("Default user created");
+  }
+}
+
 export async function registerRoutes(app: Express): Promise<Server> {
+  await initializeDefaultUser();
   // Assignment routes
   app.get("/api/assignments", async (req, res) => {
     try {

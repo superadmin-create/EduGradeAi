@@ -1,32 +1,28 @@
-import { type User, type InsertUser, type Assignment, type InsertAssignment, type Submission, type InsertSubmission, type GradingResult, type InsertGradingResult } from "@shared/schema";
-import { randomUUID } from "crypto";
+import { type User, type InsertUser, type Assignment, type InsertAssignment, type Submission, type InsertSubmission, type GradingResult, type InsertGradingResult, users, assignments, submissions, gradingResults } from "@shared/schema";
+import { db } from "./db";
+import { eq, and, sql } from "drizzle-orm";
 
 export interface IStorage {
-  // User operations
   getUser(id: string): Promise<User | undefined>;
   getUserByUsername(username: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
 
-  // Assignment operations
   getAssignment(id: string): Promise<Assignment | undefined>;
   getAssignments(userId: string): Promise<Assignment[]>;
   createAssignment(assignment: InsertAssignment): Promise<Assignment>;
   updateAssignment(id: string, assignment: Partial<Assignment>): Promise<Assignment | undefined>;
   deleteAssignment(id: string): Promise<boolean>;
 
-  // Submission operations
   getSubmission(id: string): Promise<Submission | undefined>;
   getSubmissions(assignmentId: string): Promise<Submission[]>;
   getSubmissionsByStudent(studentId: string): Promise<Submission[]>;
   createSubmission(submission: InsertSubmission): Promise<Submission>;
   updateSubmission(id: string, submission: Partial<Submission>): Promise<Submission | undefined>;
 
-  // Grading operations
   getGradingResult(submissionId: string): Promise<GradingResult | undefined>;
   getGradingResults(assignmentId: string): Promise<GradingResult[]>;
   createGradingResult(result: InsertGradingResult): Promise<GradingResult>;
 
-  // Statistics
   getAssignmentStats(userId: string): Promise<{
     totalAssignments: number;
     pendingGrading: number;
@@ -35,164 +31,122 @@ export interface IStorage {
   }>;
 }
 
-export class MemStorage implements IStorage {
-  private users: Map<string, User>;
-  private assignments: Map<string, Assignment>;
-  private submissions: Map<string, Submission>;
-  private gradingResults: Map<string, GradingResult>;
-
-  constructor() {
-    this.users = new Map();
-    this.assignments = new Map();
-    this.submissions = new Map();
-    this.gradingResults = new Map();
-  }
-
-  // User operations
+export class DatabaseStorage implements IStorage {
   async getUser(id: string): Promise<User | undefined> {
-    return this.users.get(id);
-  }
-
-  async getUserByUsername(username: string): Promise<User | undefined> {
-    return Array.from(this.users.values()).find(
-      (user) => user.username === username,
-    );
-  }
-
-  async createUser(insertUser: InsertUser): Promise<User> {
-    const id = randomUUID();
-    const user: User = { 
-      ...insertUser, 
-      id,
-      role: insertUser.role || "professor"
-    };
-    this.users.set(id, user);
+    const [user] = await db.select().from(users).where(eq(users.id, id));
     return user;
   }
 
-  // Assignment operations
+  async getUserByUsername(username: string): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(eq(users.username, username));
+    return user;
+  }
+
+  async createUser(insertUser: InsertUser): Promise<User> {
+    const [user] = await db.insert(users).values({
+      ...insertUser,
+      role: insertUser.role || "professor"
+    }).returning();
+    return user;
+  }
+
   async getAssignment(id: string): Promise<Assignment | undefined> {
-    return this.assignments.get(id);
+    const [assignment] = await db.select().from(assignments).where(eq(assignments.id, id));
+    return assignment;
   }
 
   async getAssignments(userId: string): Promise<Assignment[]> {
-    return Array.from(this.assignments.values()).filter(
-      (assignment) => assignment.userId === userId,
-    );
+    return db.select().from(assignments).where(eq(assignments.userId, userId));
   }
 
   async createAssignment(insertAssignment: InsertAssignment): Promise<Assignment> {
-    const id = randomUUID();
-    const assignment: Assignment = {
-      id,
+    const [assignment] = await db.insert(assignments).values({
       title: insertAssignment.title,
       description: insertAssignment.description || null,
       caseStudyContent: insertAssignment.caseStudyContent,
       maxPoints: insertAssignment.maxPoints,
       dueDate: null,
-      createdAt: new Date(),
       userId: insertAssignment.userId,
-    };
-    this.assignments.set(id, assignment);
+    }).returning();
     return assignment;
   }
 
   async updateAssignment(id: string, updateData: Partial<Assignment>): Promise<Assignment | undefined> {
-    const assignment = this.assignments.get(id);
-    if (!assignment) return undefined;
-    
-    const updated = { ...assignment, ...updateData };
-    this.assignments.set(id, updated);
+    const [updated] = await db.update(assignments)
+      .set(updateData)
+      .where(eq(assignments.id, id))
+      .returning();
     return updated;
   }
 
   async deleteAssignment(id: string): Promise<boolean> {
-    return this.assignments.delete(id);
+    const result = await db.delete(assignments).where(eq(assignments.id, id));
+    return true;
   }
 
-  // Submission operations
   async getSubmission(id: string): Promise<Submission | undefined> {
-    return this.submissions.get(id);
+    const [submission] = await db.select().from(submissions).where(eq(submissions.id, id));
+    return submission;
   }
 
   async getSubmissions(assignmentId: string): Promise<Submission[]> {
-    return Array.from(this.submissions.values()).filter(
-      (submission) => submission.assignmentId === assignmentId,
-    );
+    return db.select().from(submissions).where(eq(submissions.assignmentId, assignmentId));
   }
 
   async getSubmissionsByStudent(studentId: string): Promise<Submission[]> {
-    return Array.from(this.submissions.values()).filter(
-      (submission) => submission.studentId === studentId,
-    );
+    return db.select().from(submissions).where(eq(submissions.studentId, studentId));
   }
 
   async createSubmission(insertSubmission: InsertSubmission): Promise<Submission> {
-    const id = randomUUID();
-    const submission: Submission = {
+    const [submission] = await db.insert(submissions).values({
       ...insertSubmission,
-      id,
-      submittedAt: new Date(),
-      isGraded: false,
       fileName: insertSubmission.fileName || null,
-    };
-    this.submissions.set(id, submission);
+    }).returning();
     return submission;
   }
 
   async updateSubmission(id: string, updateData: Partial<Submission>): Promise<Submission | undefined> {
-    const submission = this.submissions.get(id);
-    if (!submission) return undefined;
-    
-    const updated = { ...submission, ...updateData };
-    this.submissions.set(id, updated);
+    const [updated] = await db.update(submissions)
+      .set(updateData)
+      .where(eq(submissions.id, id))
+      .returning();
     return updated;
   }
 
-  // Grading operations
   async getGradingResult(submissionId: string): Promise<GradingResult | undefined> {
-    return Array.from(this.gradingResults.values()).find(
-      (result) => result.submissionId === submissionId,
-    );
+    const [result] = await db.select().from(gradingResults).where(eq(gradingResults.submissionId, submissionId));
+    return result;
   }
 
   async getGradingResults(assignmentId: string): Promise<GradingResult[]> {
-    const submissions = await this.getSubmissions(assignmentId);
-    const submissionIds = submissions.map(s => s.id);
-    return Array.from(this.gradingResults.values()).filter(
-      (result) => submissionIds.includes(result.submissionId),
-    );
+    const assignmentSubmissions = await this.getSubmissions(assignmentId);
+    const submissionIds = assignmentSubmissions.map(s => s.id);
+    
+    if (submissionIds.length === 0) return [];
+    
+    const results: GradingResult[] = [];
+    for (const subId of submissionIds) {
+      const [result] = await db.select().from(gradingResults).where(eq(gradingResults.submissionId, subId));
+      if (result) results.push(result);
+    }
+    return results;
   }
 
   async createGradingResult(insertResult: InsertGradingResult): Promise<GradingResult> {
-    const id = randomUUID();
-    const result: GradingResult = {
-      id,
+    const [result] = await db.insert(gradingResults).values({
       submissionId: insertResult.submissionId,
-      aiAnalysis: {
-        grade: insertResult.aiAnalysis.grade,
-        score: insertResult.aiAnalysis.score,
-        maxScore: insertResult.aiAnalysis.maxScore,
-        percentage: insertResult.aiAnalysis.percentage,
-        feedback: insertResult.aiAnalysis.feedback,
-        improvements: insertResult.aiAnalysis.improvements as string[],
-        reasoning: insertResult.aiAnalysis.reasoning,
-      },
+      aiAnalysis: insertResult.aiAnalysis,
       finalScore: insertResult.finalScore,
       maxScore: insertResult.maxScore,
       percentage: insertResult.percentage,
       feedback: insertResult.feedback,
-      gradedAt: new Date(),
-    };
-    this.gradingResults.set(id, result);
+    }).returning();
     
-    // Update submission to mark as graded
     await this.updateSubmission(result.submissionId, { isGraded: true });
     
     return result;
   }
 
-  // Statistics
   async getAssignmentStats(userId: string): Promise<{
     totalAssignments: number;
     pendingGrading: number;
@@ -208,11 +162,11 @@ export class MemStorage implements IStorage {
     let gradeCount = 0;
 
     for (const assignment of userAssignments) {
-      const submissions = await this.getSubmissions(assignment.id);
-      const ungradedSubmissions = submissions.filter(s => !s.isGraded);
+      const assignmentSubmissions = await this.getSubmissions(assignment.id);
+      const ungradedSubmissions = assignmentSubmissions.filter(s => !s.isGraded);
       pendingGrading += ungradedSubmissions.length;
 
-      submissions.forEach(s => studentIds.add(s.studentId));
+      assignmentSubmissions.forEach(s => studentIds.add(s.studentId));
 
       const results = await this.getGradingResults(assignment.id);
       results.forEach(r => {
@@ -232,4 +186,4 @@ export class MemStorage implements IStorage {
   }
 }
 
-export const storage = new MemStorage();
+export const storage = new DatabaseStorage();
