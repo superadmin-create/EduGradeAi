@@ -29,10 +29,10 @@ const upload = multer({
 
 const SessionStore = MemoryStore(session);
 
-async function initializeSXCACollege() {
-  const existingCollege = await storage.getCollegeByCode("SXCA");
+async function initializeColleges() {
+  const existingSXCA = await storage.getCollegeByCode("SXCA");
   
-  if (!existingCollege) {
+  if (!existingSXCA) {
     const college = await storage.createCollege({
       name: "SXCA College",
       code: "SXCA",
@@ -49,6 +49,27 @@ async function initializeSXCACollege() {
     });
     
     console.log("SXCA College created with admin user");
+  }
+  
+  const existingLeapup = await storage.getCollegeByCode("LEAPUP");
+  
+  if (!existingLeapup) {
+    const college = await storage.createCollege({
+      name: "Leapup",
+      code: "LEAPUP",
+      quota: null,
+      isActive: true,
+    });
+    
+    await db.insert(users).values({
+      username: "admin",
+      password: "leapup2025",
+      name: "Leapup Administrator",
+      role: "professor",
+      collegeId: college.id,
+    });
+    
+    console.log("Leapup (Main Admin) created with unlimited quota");
   }
 }
 
@@ -76,7 +97,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     })
   );
 
-  await initializeSXCACollege();
+  await initializeColleges();
 
   // Authentication routes
   app.post("/api/auth/login", async (req, res) => {
@@ -126,7 +147,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
     
     const user = await storage.getUser(req.session.userId);
-    const college = await storage.getCollege(req.session.collegeId);
+    const college = req.session.collegeId ? await storage.getCollege(req.session.collegeId) : undefined;
     
     if (!user || !college) {
       return res.json({ user: null, college: null });
@@ -167,7 +188,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const collegeId = req.session.collegeId!;
       
       const college = await storage.getCollege(collegeId);
-      if (college && college.usedQuota >= college.quota) {
+      if (college && college.quota !== null && college.usedQuota >= college.quota) {
         return res.status(403).json({ 
           message: "Assignment quota exceeded. Please contact your administrator." 
         });
@@ -224,7 +245,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const collegeId = req.session.collegeId!;
       
       const college = await storage.getCollege(collegeId);
-      if (college && college.usedQuota >= college.quota) {
+      if (college && college.quota !== null && college.usedQuota >= college.quota) {
         return res.status(403).json({ 
           message: "Assignment quota exceeded. Please contact your administrator." 
         });
@@ -296,7 +317,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const college = await storage.getCollege(collegeId);
-      if (college && college.usedQuota >= college.quota) {
+      if (college && college.quota !== null && college.usedQuota >= college.quota) {
         return res.status(403).json({ 
           message: "Assignment quota exceeded. Please contact your administrator." 
         });
@@ -366,7 +387,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const collegeId = req.session.collegeId!;
       
       const college = await storage.getCollege(collegeId);
-      if (college && college.usedQuota >= college.quota) {
+      if (college && college.quota !== null && college.usedQuota >= college.quota) {
         return res.status(403).json({ 
           message: "Grading quota exceeded. Please contact your administrator to increase your quota." 
         });
@@ -425,7 +446,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       let gradedCount = 0;
 
       for (const submission of ungradedSubmissions) {
-        if (college && (college.usedQuota + gradedCount) >= college.quota) {
+        if (college && college.quota !== null && (college.usedQuota + gradedCount) >= college.quota) {
           errors.push({
             submissionId: submission.id,
             studentName: submission.studentName,

@@ -45,7 +45,7 @@ export interface IStorage {
     totalStudents: number;
     averageGrade: number;
     quotaUsed: number;
-    quotaTotal: number;
+    quotaTotal: number | null;
   }>;
 }
 

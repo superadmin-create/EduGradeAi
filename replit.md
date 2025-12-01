@@ -9,6 +9,8 @@ This is an AI-powered assignment grading application built with React frontend a
 The application supports multiple colleges with individual login credentials and grading quotas.
 
 ### Registered Colleges
+- **Leapup (Main Admin)**: Code `LEAPUP`, Quota: Unlimited
+  - Login: username `admin`, password `leapup2025`
 - **SXCA College**: Code `SXCA`, Quota: 100 assignments
   - Login: username `admin`, password `sxca2024`
 

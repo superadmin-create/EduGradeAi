@@ -7,7 +7,7 @@ export const colleges = pgTable("colleges", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   name: text("name").notNull(),
   code: text("code").notNull().unique(),
-  quota: integer("quota").notNull().default(100),
+  quota: integer("quota"),
   usedQuota: integer("used_quota").notNull().default(0),
   isActive: boolean("is_active").notNull().default(true),
   createdAt: timestamp("created_at").default(sql`now()`).notNull(),
@@ -15,7 +15,7 @@ export const colleges = pgTable("colleges", {
 
 export const users = pgTable("users", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  username: text("username").notNull().unique(),
+  username: text("username").notNull(),
   password: text("password").notNull(),
   name: text("name").notNull(),
   role: text("role").notNull().default("professor"),
