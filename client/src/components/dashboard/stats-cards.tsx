@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
-import { FileText, Clock, Users, TrendingUp } from "lucide-react";
+import { FileText, Clock, Users, TrendingUp, Target } from "lucide-react";
 import { useLocation } from "wouter";
+import { Progress } from "@/components/ui/progress";
 
 interface StatCard {
   label: string;
@@ -16,6 +17,8 @@ interface StatsData {
   pendingGrading: number;
   totalStudents: number;
   averageGrade: number;
+  quotaUsed: number;
+  quotaTotal: number;
 }
 
 export default function StatsCards() {
@@ -26,8 +29,8 @@ export default function StatsCards() {
 
   if (isLoading) {
     return (
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        {Array.from({ length: 4 }).map((_, i) => (
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
+        {Array.from({ length: 5 }).map((_, i) => (
           <div key={i} className="stat-card p-6 rounded-lg animate-pulse">
             <div className="flex items-center justify-between">
               <div className="space-y-2">
@@ -42,6 +45,9 @@ export default function StatsCards() {
       </div>
     );
   }
+
+  const quotaPercentage = stats?.quotaTotal ? Math.round((stats.quotaUsed / stats.quotaTotal) * 100) : 0;
+  const quotaRemaining = (stats?.quotaTotal || 0) - (stats?.quotaUsed || 0);
 
   const statsCards: StatCard[] = [
     {
@@ -79,35 +85,76 @@ export default function StatsCards() {
   ];
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-      {statsCards.map((card, index) => {
-        const Icon = card.icon;
-        return (
-          <div 
-            key={index} 
-            className="stat-card p-6 rounded-lg cursor-pointer hover:shadow-lg transition-shadow" 
-            data-testid={`stat-card-${card.label.toLowerCase().replace(/\s+/g, '-')}`}
-            onClick={() => setLocation(card.navigateTo)}
-          >
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-muted-foreground text-sm font-medium">{card.label}</p>
-                <p className="text-3xl font-bold text-foreground mt-2">{card.value}</p>
-                <p className={`text-xs mt-1 ${
-                  card.changeType === 'positive' ? 'text-accent' : 
-                  card.changeType === 'negative' ? 'text-destructive' : 
-                  'text-muted-foreground'
-                }`}>
-                  {card.change}
-                </p>
-              </div>
-              <div className="w-12 h-12 bg-primary/10 rounded-lg flex items-center justify-center">
-                <Icon className="text-primary text-xl" />
+    <div className="space-y-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        {statsCards.map((card, index) => {
+          const Icon = card.icon;
+          return (
+            <div 
+              key={index} 
+              className="stat-card p-6 rounded-lg cursor-pointer hover:shadow-lg transition-shadow" 
+              data-testid={`stat-card-${card.label.toLowerCase().replace(/\s+/g, '-')}`}
+              onClick={() => setLocation(card.navigateTo)}
+            >
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-muted-foreground text-sm font-medium">{card.label}</p>
+                  <p className="text-3xl font-bold text-foreground mt-2">{card.value}</p>
+                  <p className={`text-xs mt-1 ${
+                    card.changeType === 'positive' ? 'text-accent' : 
+                    card.changeType === 'negative' ? 'text-destructive' : 
+                    'text-muted-foreground'
+                  }`}>
+                    {card.change}
+                  </p>
+                </div>
+                <div className="w-12 h-12 bg-primary/10 rounded-lg flex items-center justify-center">
+                  <Icon className="text-primary text-xl" />
+                </div>
               </div>
             </div>
+          );
+        })}
+      </div>
+
+      <div className="stat-card p-6 rounded-lg" data-testid="quota-card">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center space-x-3">
+            <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center">
+              <Target className="text-primary w-5 h-5" />
+            </div>
+            <div>
+              <h3 className="font-semibold text-foreground">Grading Quota</h3>
+              <p className="text-sm text-muted-foreground">
+                {quotaRemaining} gradings remaining this period
+              </p>
+            </div>
           </div>
-        );
-      })}
+          <div className="text-right">
+            <span className="text-2xl font-bold text-foreground">
+              {stats?.quotaUsed || 0}
+            </span>
+            <span className="text-muted-foreground">
+              {" / "}{stats?.quotaTotal || 0}
+            </span>
+          </div>
+        </div>
+        <Progress 
+          value={quotaPercentage} 
+          className={`h-3 ${
+            quotaPercentage > 90 ? '[&>div]:bg-destructive' : 
+            quotaPercentage > 70 ? '[&>div]:bg-amber-500' : ''
+          }`}
+        />
+        <p className={`text-xs mt-2 ${
+          quotaPercentage > 90 ? 'text-destructive' : 
+          quotaPercentage > 70 ? 'text-amber-500' : 
+          'text-muted-foreground'
+        }`}>
+          {quotaPercentage}% of quota used
+          {quotaPercentage > 90 && " - Contact administrator for more quota"}
+        </p>
+      </div>
     </div>
   );
 }

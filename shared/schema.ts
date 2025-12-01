@@ -3,12 +3,23 @@ import { pgTable, text, varchar, integer, timestamp, boolean, jsonb } from "driz
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
+export const colleges = pgTable("colleges", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  code: text("code").notNull().unique(),
+  quota: integer("quota").notNull().default(100),
+  usedQuota: integer("used_quota").notNull().default(0),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at").default(sql`now()`).notNull(),
+});
+
 export const users = pgTable("users", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   username: text("username").notNull().unique(),
   password: text("password").notNull(),
   name: text("name").notNull(),
   role: text("role").notNull().default("professor"),
+  collegeId: varchar("college_id").references(() => colleges.id),
 });
 
 export const assignments = pgTable("assignments", {
@@ -70,19 +81,31 @@ export const insertGradingResultSchema = createInsertSchema(gradingResults).omit
   gradedAt: true,
 });
 
+export const insertCollegeSchema = createInsertSchema(colleges).omit({
+  id: true,
+  createdAt: true,
+  usedQuota: true,
+});
+
+export const insertUserSchema = createInsertSchema(users).omit({
+  id: true,
+});
+
+export const loginSchema = z.object({
+  collegeCode: z.string().min(1, "College code is required"),
+  username: z.string().min(1, "Username is required"),
+  password: z.string().min(1, "Password is required"),
+});
+
+export type College = typeof colleges.$inferSelect;
 export type User = typeof users.$inferSelect;
 export type Assignment = typeof assignments.$inferSelect;
 export type Submission = typeof submissions.$inferSelect;
 export type GradingResult = typeof gradingResults.$inferSelect;
 
+export type InsertCollege = z.infer<typeof insertCollegeSchema>;
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type InsertAssignment = z.infer<typeof insertAssignmentSchema>;
 export type InsertSubmission = z.infer<typeof insertSubmissionSchema>;
 export type InsertGradingResult = z.infer<typeof insertGradingResultSchema>;
-
-export const insertUserSchema = createInsertSchema(users).pick({
-  username: true,
-  password: true,
-  name: true,
-  role: true,
-});
+export type LoginData = z.infer<typeof loginSchema>;
