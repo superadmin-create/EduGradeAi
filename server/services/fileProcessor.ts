@@ -129,7 +129,8 @@ async function processPPTXWithVision(fileBuffer: Buffer, originalName: string): 
 export async function processUploadedFile(
   fileBuffer: Buffer,
   originalName: string,
-  mimeType: string
+  mimeType: string,
+  fastMode: boolean = false
 ): Promise<ProcessedFile> {
   try {
     let content: string;
@@ -149,7 +150,15 @@ export async function processUploadedFile(
     }
     // Handle PowerPoint presentations
     else if (isPresentationFile(originalName, mimeType)) {
-      content = await processPPTXWithVision(fileBuffer, originalName);
+      if (fastMode) {
+        // Fast mode: only extract text, skip Vision API for embedded images
+        content = await extractTextFromPPTX(fileBuffer);
+        if (!content.trim()) {
+          content = "[PowerPoint presentation - text content will be extracted during grading]";
+        }
+      } else {
+        content = await processPPTXWithVision(fileBuffer, originalName);
+      }
     }
     // Handle plain text files
     else if (mimeType.startsWith('text/') || originalName.match(/\.(txt|md)$/i)) {
@@ -204,8 +213,8 @@ export async function processUploadedFile(
       
       content = textParts.join('\n\n');
       
-      // Process any extracted images with Vision API
-      if (pdfImages.length > 0) {
+      // Process any extracted images with Vision API (skip in fast mode)
+      if (!fastMode && pdfImages.length > 0) {
         const imageText = await extractTextFromMultipleImages(pdfImages.slice(0, 10)); // Limit to 10 images
         if (imageText.trim()) {
           content += "\n\n=== Content from PDF Images ===\n\n" + imageText;
@@ -217,32 +226,34 @@ export async function processUploadedFile(
       const result = await mammoth.extractRawText({ buffer: fileBuffer });
       content = result.value;
       
-      // Also try to extract images from DOCX
-      try {
-        const imageResult = await mammoth.convertToHtml({ buffer: fileBuffer });
-        // Extract base64 images from HTML if present
-        const imgMatches = imageResult.value.match(/src="data:image\/(png|jpeg|jpg|gif);base64,([^"]+)"/g);
-        if (imgMatches && imgMatches.length > 0) {
-          const docImages: Array<{base64: string, mimeType: string}> = [];
-          for (const match of imgMatches.slice(0, 10)) { // Limit to 10 images
-            const dataMatch = match.match(/src="data:image\/(png|jpeg|jpg|gif);base64,([^"]+)"/);
-            if (dataMatch) {
-              docImages.push({
-                base64: dataMatch[2],
-                mimeType: `image/${dataMatch[1]}`
-              });
+      // Also try to extract images from DOCX (skip in fast mode)
+      if (!fastMode) {
+        try {
+          const imageResult = await mammoth.convertToHtml({ buffer: fileBuffer });
+          // Extract base64 images from HTML if present
+          const imgMatches = imageResult.value.match(/src="data:image\/(png|jpeg|jpg|gif);base64,([^"]+)"/g);
+          if (imgMatches && imgMatches.length > 0) {
+            const docImages: Array<{base64: string, mimeType: string}> = [];
+            for (const match of imgMatches.slice(0, 10)) { // Limit to 10 images
+              const dataMatch = match.match(/src="data:image\/(png|jpeg|jpg|gif);base64,([^"]+)"/);
+              if (dataMatch) {
+                docImages.push({
+                  base64: dataMatch[2],
+                  mimeType: `image/${dataMatch[1]}`
+                });
+              }
+            }
+            
+            if (docImages.length > 0) {
+              const imageText = await extractTextFromMultipleImages(docImages);
+              if (imageText.trim()) {
+                content += "\n\n=== Content from Document Images ===\n\n" + imageText;
+              }
             }
           }
-          
-          if (docImages.length > 0) {
-            const imageText = await extractTextFromMultipleImages(docImages);
-            if (imageText.trim()) {
-              content += "\n\n=== Content from Document Images ===\n\n" + imageText;
-            }
-          }
+        } catch (e) {
+          // Image extraction from DOCX failed, continue with text
         }
-      } catch (e) {
-        // Image extraction from DOCX failed, continue with text
       }
     } 
     // Handle spreadsheet files

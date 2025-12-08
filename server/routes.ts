@@ -618,12 +618,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       let content = "";
       let fileName = null;
 
-      // Process file synchronously to ensure content is saved (prevents data loss on restart)
+      // Process file in fast mode (skips Vision API for embedded images, much faster)
       if (req.file) {
         const processedFile = await processUploadedFile(
           req.file.buffer,
           req.file.originalname,
-          req.file.mimetype
+          req.file.mimetype,
+          true // fastMode - skip Vision API for embedded images in documents
         );
         content = processedFile.content;
         fileName = processedFile.originalName;
@@ -631,7 +632,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         content = req.body.content;
       }
 
-      // Create submission with actual content
+      // Create submission with extracted content
       const submission = await storage.createSubmission({
         assignmentId: assignment.id,
         studentName,
@@ -640,7 +641,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         fileName,
       });
 
-      // Respond to student after file processing but before grading
+      // Respond to student immediately
       res.status(201).json({ 
         message: "Submission received successfully! Your assignment is being graded.",
         submissionId: submission.id,
