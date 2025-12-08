@@ -110,3 +110,57 @@ export async function extractTextFromContent(content: string, fileName?: string)
     throw new Error("Failed to extract text from file: " + (error as Error).message);
   }
 }
+
+export async function extractTextFromImage(imageBase64: string, mimeType: string): Promise<string> {
+  try {
+    const response = await openai.chat.completions.create({
+      model: "gpt-4o",
+      messages: [
+        {
+          role: "system",
+          content: "You are a helpful assistant that extracts all text content from images. Extract ALL visible text including headings, paragraphs, bullet points, captions, labels, handwritten text, and any other textual content. Preserve the structure and formatting as much as possible. If there are diagrams or charts, describe them briefly and extract any text labels."
+        },
+        {
+          role: "user",
+          content: [
+            {
+              type: "text",
+              text: "Please extract all text content from this image. Include all visible text, headings, bullet points, and any textual information visible in charts, diagrams, or slides."
+            },
+            {
+              type: "image_url",
+              image_url: {
+                url: `data:${mimeType};base64,${imageBase64}`,
+                detail: "high"
+              }
+            }
+          ]
+        }
+      ],
+      max_tokens: 4096
+    });
+
+    return response.choices[0].message.content || "";
+  } catch (error) {
+    console.error("Error extracting text from image:", error);
+    return ""; // Return empty string on error to continue processing
+  }
+}
+
+export async function extractTextFromMultipleImages(images: Array<{base64: string, mimeType: string}>): Promise<string> {
+  const results: string[] = [];
+  
+  for (let i = 0; i < images.length; i++) {
+    const image = images[i];
+    try {
+      const text = await extractTextFromImage(image.base64, image.mimeType);
+      if (text.trim()) {
+        results.push(`--- Image/Slide ${i + 1} ---\n${text}`);
+      }
+    } catch (error) {
+      console.error(`Error processing image ${i + 1}:`, error);
+    }
+  }
+  
+  return results.join('\n\n');
+}

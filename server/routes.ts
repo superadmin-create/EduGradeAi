@@ -619,6 +619,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
         fileName,
       });
 
+      // Auto-grade the submission if college has quota available
+      if (college.quota === null || college.usedQuota < college.quota) {
+        try {
+          const gradingResult = await gradeAssignment({
+            caseStudyContent: assignment.caseStudyContent,
+            studentResponse: submission.content,
+            maxPoints: assignment.maxPoints,
+            assignmentTitle: assignment.title,
+          });
+
+          await storage.createGradingResult({
+            submissionId: submission.id,
+            aiAnalysis: gradingResult,
+            finalScore: gradingResult.score,
+            maxScore: gradingResult.maxScore,
+            percentage: gradingResult.percentage,
+            feedback: gradingResult.feedback,
+          });
+          
+          await storage.incrementCollegeUsedQuota(college.id);
+        } catch (gradingError) {
+          console.error("Failed to auto-grade student portal submission:", gradingError);
+        }
+      }
+
       res.status(201).json({ 
         message: "Submission received successfully",
         submissionId: submission.id,

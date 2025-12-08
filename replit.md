@@ -33,7 +33,8 @@ Each college has a dedicated student portal for assignment submissions.
 ### Student Portal Features
 - View list of assignments for their college
 - Enter student name and student ID
-- Upload submission files (PDF, DOC, DOCX, TXT, MD supported)
+- Upload submission files (PDF, DOC, DOCX, PPTX, TXT, MD, PNG, JPG, GIF supported)
+- Automatic AI grading upon submission (if college has available quota)
 - Receive confirmation upon successful submission
 
 ## Export Functionality
@@ -82,8 +83,9 @@ Preferred communication style: Simple, everyday language.
 - **Route Protection**: All API routes (except auth endpoints) require authentication
 
 ### File Processing Pipeline
-- **Upload Handling**: Multi-format file support (PDF, DOC, DOCX, XLSX, XLS, CSV, TXT, MD)
-- **Content Extraction**: Text processing using pdfjs-dist, mammoth, xlsx libraries
+- **Upload Handling**: Multi-format file support (PDF, DOC, DOCX, PPTX, XLSX, XLS, CSV, TXT, MD, PNG, JPG, GIF)
+- **Content Extraction**: Text processing using pdfjs-dist, mammoth, xlsx, jszip libraries
+- **Image/Photo Extraction**: OpenAI Vision API (GPT-4o) for extracting text from images, slides, and photos
 - **Validation**: File type and size validation with error handling
 - **Storage**: File content stored as text in database for AI processing
 
