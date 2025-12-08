@@ -177,37 +177,39 @@ export async function processUploadedFile(
         const pageText = textContent.items.map((item: any) => item.str).join(' ');
         textParts.push(`--- Page ${pageNum} ---\n${pageText}`);
         
-        // Try to extract images from PDF pages
-        try {
-          const operatorList = await page.getOperatorList();
-          const objs = page.objs;
-          
-          for (let i = 0; i < operatorList.fnArray.length; i++) {
-            // OPS.paintImageXObject = 85
-            if (operatorList.fnArray[i] === 85) {
-              const imgName = operatorList.argsArray[i][0];
-              try {
-                const imgData = await new Promise<any>((resolve, reject) => {
-                  objs.get(imgName, (data: any) => {
-                    if (data) resolve(data);
-                    else reject(new Error('No image data'));
+        // Skip image extraction in fast mode (this is the slow part)
+        if (!fastMode) {
+          try {
+            const operatorList = await page.getOperatorList();
+            const objs = page.objs;
+            
+            for (let i = 0; i < operatorList.fnArray.length; i++) {
+              // OPS.paintImageXObject = 85
+              if (operatorList.fnArray[i] === 85) {
+                const imgName = operatorList.argsArray[i][0];
+                try {
+                  const imgData = await new Promise<any>((resolve, reject) => {
+                    objs.get(imgName, (data: any) => {
+                      if (data) resolve(data);
+                      else reject(new Error('No image data'));
+                    });
                   });
-                });
-                
-                if (imgData && imgData.data && imgData.width > 50 && imgData.height > 50) {
-                  // Convert raw image data to PNG base64
-                  const canvas = createImageCanvas(imgData);
-                  if (canvas) {
-                    pdfImages.push({ base64: canvas, mimeType: 'image/png' });
+                  
+                  if (imgData && imgData.data && imgData.width > 50 && imgData.height > 50) {
+                    // Convert raw image data to PNG base64
+                    const canvas = createImageCanvas(imgData);
+                    if (canvas) {
+                      pdfImages.push({ base64: canvas, mimeType: 'image/png' });
+                    }
                   }
+                } catch (e) {
+                  // Skip images that can't be extracted
                 }
-              } catch (e) {
-                // Skip images that can't be extracted
               }
             }
+          } catch (e) {
+            // Page image extraction failed, continue with text
           }
-        } catch (e) {
-          // Page image extraction failed, continue with text
         }
       }
       
