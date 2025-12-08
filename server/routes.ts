@@ -605,49 +605,70 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Student name and ID are required" });
       }
 
-      let content = "";
-      let fileName = null;
-
-      // Handle file upload
-      if (req.file) {
-        validateFileUpload(req.file);
-        const processedFile = await processUploadedFile(
-          req.file.buffer,
-          req.file.originalname,
-          req.file.mimetype
-        );
-        content = processedFile.content;
-        fileName = processedFile.originalName;
-      } else if (req.body.content) {
-        content = req.body.content;
-      } else {
+      // Validate file exists
+      if (!req.file && !req.body.content) {
         return res.status(400).json({ message: "File or content is required" });
       }
 
+      // Validate file if provided
+      if (req.file) {
+        validateFileUpload(req.file);
+      }
+
+      // Store file info for background processing
+      const fileBuffer = req.file ? Buffer.from(req.file.buffer) : null;
+      const fileOriginalName = req.file?.originalname || null;
+      const fileMimeType = req.file?.mimetype || null;
+      const textContent = req.body.content || null;
+
+      // Create submission with placeholder content (will be updated after processing)
       const submission = await storage.createSubmission({
         assignmentId: assignment.id,
         studentName,
         studentId,
-        content,
-        fileName,
+        content: textContent || "[Processing file...]",
+        fileName: fileOriginalName,
       });
 
-      // Immediately respond to student - don't make them wait for grading
+      // Immediately respond to student - don't make them wait
       res.status(201).json({ 
-        message: "Submission received successfully! Your assignment is being graded.",
+        message: "Submission received successfully! Your assignment is being processed and graded.",
         submissionId: submission.id,
         studentName: submission.studentName,
         submittedAt: submission.submittedAt
       });
 
-      // Auto-grade the submission in the background if college has quota available
-      if (college.quota === null || college.usedQuota < college.quota) {
-        // Run grading asynchronously (don't await)
-        (async () => {
-          try {
+      // Process file and grade in the background
+      (async () => {
+        try {
+          let content = textContent || "";
+          
+          // Process file if uploaded
+          if (fileBuffer && fileOriginalName && fileMimeType) {
+            try {
+              const processedFile = await processUploadedFile(
+                fileBuffer,
+                fileOriginalName,
+                fileMimeType
+              );
+              content = processedFile.content;
+              
+              // Update submission with processed content
+              await storage.updateSubmission(submission.id, { content });
+            } catch (processError) {
+              console.error("Failed to process file:", processError);
+              await storage.updateSubmission(submission.id, { 
+                content: "[File processing failed. Please resubmit or contact admin.]" 
+              });
+              return;
+            }
+          }
+
+          // Auto-grade if college has quota available
+          if (college.quota === null || college.usedQuota < college.quota) {
             const gradingResult = await gradeAssignment({
               caseStudyContent: assignment.caseStudyContent,
-              studentResponse: submission.content,
+              studentResponse: content,
               maxPoints: assignment.maxPoints,
               assignmentTitle: assignment.title,
             });
@@ -662,12 +683,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
             });
             
             await storage.incrementCollegeUsedQuota(college.id);
-            console.log(`Background grading completed for submission ${submission.id}`);
-          } catch (gradingError) {
-            console.error("Failed to auto-grade student portal submission:", gradingError);
+            console.log(`Background processing and grading completed for submission ${submission.id}`);
           }
-        })();
-      }
+        } catch (error) {
+          console.error("Failed to process/grade submission:", error);
+        }
+      })();
     } catch (error) {
       res.status(400).json({ message: "Failed to submit assignment", error: (error as Error).message });
     }
