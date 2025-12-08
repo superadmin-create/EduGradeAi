@@ -632,37 +632,42 @@ export async function registerRoutes(app: Express): Promise<Server> {
         fileName,
       });
 
-      // Auto-grade the submission if college has quota available
-      if (college.quota === null || college.usedQuota < college.quota) {
-        try {
-          const gradingResult = await gradeAssignment({
-            caseStudyContent: assignment.caseStudyContent,
-            studentResponse: submission.content,
-            maxPoints: assignment.maxPoints,
-            assignmentTitle: assignment.title,
-          });
-
-          await storage.createGradingResult({
-            submissionId: submission.id,
-            aiAnalysis: gradingResult,
-            finalScore: gradingResult.score,
-            maxScore: gradingResult.maxScore,
-            percentage: gradingResult.percentage,
-            feedback: gradingResult.feedback,
-          });
-          
-          await storage.incrementCollegeUsedQuota(college.id);
-        } catch (gradingError) {
-          console.error("Failed to auto-grade student portal submission:", gradingError);
-        }
-      }
-
+      // Immediately respond to student - don't make them wait for grading
       res.status(201).json({ 
-        message: "Submission received successfully",
+        message: "Submission received successfully! Your assignment is being graded.",
         submissionId: submission.id,
         studentName: submission.studentName,
         submittedAt: submission.submittedAt
       });
+
+      // Auto-grade the submission in the background if college has quota available
+      if (college.quota === null || college.usedQuota < college.quota) {
+        // Run grading asynchronously (don't await)
+        (async () => {
+          try {
+            const gradingResult = await gradeAssignment({
+              caseStudyContent: assignment.caseStudyContent,
+              studentResponse: submission.content,
+              maxPoints: assignment.maxPoints,
+              assignmentTitle: assignment.title,
+            });
+
+            await storage.createGradingResult({
+              submissionId: submission.id,
+              aiAnalysis: gradingResult,
+              finalScore: gradingResult.score,
+              maxScore: gradingResult.maxScore,
+              percentage: gradingResult.percentage,
+              feedback: gradingResult.feedback,
+            });
+            
+            await storage.incrementCollegeUsedQuota(college.id);
+            console.log(`Background grading completed for submission ${submission.id}`);
+          } catch (gradingError) {
+            console.error("Failed to auto-grade student portal submission:", gradingError);
+          }
+        })();
+      }
     } catch (error) {
       res.status(400).json({ message: "Failed to submit assignment", error: (error as Error).message });
     }
