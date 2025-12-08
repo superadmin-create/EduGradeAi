@@ -40,6 +40,9 @@ export const submissions = pgTable("submissions", {
   studentId: text("student_id").notNull(),
   content: text("content").notNull(),
   fileName: text("file_name"),
+  fileMimeType: text("file_mime_type"),
+  rawFileData: text("raw_file_data"),
+  needsVisionProcessing: boolean("needs_vision_processing").default(false).notNull(),
   submittedAt: timestamp("submitted_at").default(sql`now()`).notNull(),
   isGraded: boolean("is_graded").default(false).notNull(),
 });
@@ -74,6 +77,7 @@ export const insertSubmissionSchema = createInsertSchema(submissions).omit({
   id: true,
   submittedAt: true,
   isGraded: true,
+  needsVisionProcessing: true,
 });
 
 export const insertGradingResultSchema = createInsertSchema(gradingResults).omit({

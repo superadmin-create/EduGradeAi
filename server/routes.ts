@@ -617,6 +617,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       let content = "";
       let fileName = null;
+      let rawFileData: string | null = null;
+      let fileMimeType: string | null = null;
+      let needsVisionProcessing = false;
 
       // Process file in fast mode (skips Vision API for embedded images, much faster)
       if (req.file) {
@@ -628,29 +631,51 @@ export async function registerRoutes(app: Express): Promise<Server> {
         );
         content = processedFile.content;
         fileName = processedFile.originalName;
+        
+        // Check if content is mostly empty (likely image-based PDF/PPTX that needs Vision processing)
+        const contentWithoutPageMarkers = content.replace(/---\s*Page\s*\d+\s*---/g, '').replace(/---\s*Slide\s*\d+\s*---/g, '').trim();
+        const hasSubstantiveContent = contentWithoutPageMarkers.length > 50;
+        
+        if (!hasSubstantiveContent) {
+          // Store raw file for background Vision processing
+          rawFileData = req.file.buffer.toString('base64');
+          fileMimeType = req.file.mimetype;
+          needsVisionProcessing = true;
+          content = "[Processing images - grading will complete shortly...]";
+        }
       } else if (req.body.content) {
         content = req.body.content;
       }
 
-      // Create submission with extracted content
+      // Create submission with extracted content (or placeholder if Vision processing needed)
       const submission = await storage.createSubmission({
         assignmentId: assignment.id,
         studentName,
         studentId,
         content,
         fileName,
+        rawFileData,
+        fileMimeType,
       });
+      
+      // Flag for Vision processing if needed
+      if (needsVisionProcessing) {
+        await storage.updateSubmission(submission.id, { needsVisionProcessing: true });
+      }
 
       // Respond to student immediately
       res.status(201).json({ 
-        message: "Submission received successfully! Your assignment is being graded.",
+        message: needsVisionProcessing 
+          ? "Submission received! Processing images and grading will complete shortly."
+          : "Submission received successfully! Your assignment is being graded.",
         submissionId: submission.id,
         studentName: submission.studentName,
         submittedAt: submission.submittedAt
       });
 
-      // Grade in the background (the slower part)
-      if (college.quota === null || college.usedQuota < college.quota) {
+      // Only grade immediately if no Vision processing needed
+      // Vision processing + grading will happen in background processor
+      if (!needsVisionProcessing && (college.quota === null || college.usedQuota < college.quota)) {
         (async () => {
           try {
             const gradingResult = await gradeAssignment({

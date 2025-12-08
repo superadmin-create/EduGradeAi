@@ -34,6 +34,7 @@ export interface IStorage {
   createGradingResult(result: InsertGradingResult): Promise<GradingResult>;
   
   getPendingSubmissions(): Promise<Submission[]>;
+  getSubmissionsNeedingVisionProcessing(): Promise<Submission[]>;
 
   getAssignmentStats(userId: string): Promise<{
     totalAssignments: number;
@@ -255,6 +256,12 @@ export class DatabaseStorage implements IStorage {
         eq(submissions.isGraded, false),
         like(submissions.content, '[Processing file...]%')
       )
+    );
+  }
+
+  async getSubmissionsNeedingVisionProcessing(): Promise<Submission[]> {
+    return db.select().from(submissions).where(
+      eq(submissions.needsVisionProcessing, true)
     );
   }
 
