@@ -2,11 +2,22 @@ import { storage } from "../storage";
 import { processUploadedFile } from "./fileProcessor";
 import { gradeAssignment } from "./openai";
 
+// Lock to prevent concurrent Vision processing
+let isVisionProcessing = false;
+
 // Process submissions that need Vision API processing for image-based content
 export async function processVisionSubmissions(): Promise<void> {
+  // Skip if already processing
+  if (isVisionProcessing) {
+    console.log("Vision processing already in progress, skipping...");
+    return;
+  }
+  
   console.log("Checking for submissions needing Vision processing...");
   
   try {
+    isVisionProcessing = true;
+    
     const visionSubmissions = await storage.getSubmissionsNeedingVisionProcessing();
     
     if (visionSubmissions.length === 0) {
@@ -16,75 +27,80 @@ export async function processVisionSubmissions(): Promise<void> {
     
     console.log(`Found ${visionSubmissions.length} submissions needing Vision processing.`);
     
-    for (const submission of visionSubmissions) {
-      try {
-        if (!submission.rawFileData || !submission.fileMimeType) {
-          console.log(`Submission ${submission.id} missing file data, marking as complete.`);
-          await storage.updateSubmission(submission.id, { 
-            needsVisionProcessing: false,
-            content: "[Error: Original file data not available for processing]"
-          });
-          continue;
-        }
-        
-        console.log(`Vision processing submission ${submission.id} for student ${submission.studentName}...`);
-        
-        // Convert base64 back to buffer and process with full Vision API
-        const fileBuffer = Buffer.from(submission.rawFileData, 'base64');
-        const processedFile = await processUploadedFile(
-          fileBuffer,
-          submission.fileName || 'file',
-          submission.fileMimeType,
-          false // Full processing with Vision API
-        );
-        
-        // Update submission with extracted content and clear raw file data
-        await storage.updateSubmission(submission.id, {
-          content: processedFile.content,
-          needsVisionProcessing: false,
-          rawFileData: null, // Clear raw data to save space
-        });
-        
-        console.log(`Vision processing completed for submission ${submission.id}`);
-        
-        // Now grade the submission
-        const assignment = await storage.getAssignment(submission.assignmentId);
-        if (assignment) {
-          const existingResult = await storage.getGradingResult(submission.id);
-          if (!existingResult) {
-            console.log(`Grading submission ${submission.id}...`);
-            const gradingResult = await gradeAssignment({
-              caseStudyContent: assignment.caseStudyContent,
-              studentResponse: processedFile.content,
-              maxPoints: assignment.maxPoints,
-              assignmentTitle: assignment.title,
-            });
-
-            await storage.createGradingResult({
-              submissionId: submission.id,
-              aiAnalysis: gradingResult,
-              finalScore: gradingResult.score,
-              maxScore: gradingResult.maxScore,
-              percentage: gradingResult.percentage,
-              feedback: gradingResult.feedback,
-            });
-            
-            console.log(`Grading completed for submission ${submission.id}: ${gradingResult.grade}`);
-          }
-        }
-      } catch (error) {
-        console.error(`Failed to Vision-process submission ${submission.id}:`, error);
-        // Mark as complete to avoid retrying forever
+    // Process only ONE submission at a time to avoid timeouts
+    const submission = visionSubmissions[0];
+    
+    try {
+      if (!submission.rawFileData || !submission.fileMimeType) {
+        console.log(`Submission ${submission.id} missing file data, marking as complete.`);
         await storage.updateSubmission(submission.id, { 
           needsVisionProcessing: false,
-          content: `[Vision processing failed: ${(error as Error).message}]`
+          content: "[Error: Original file data not available for processing. Please resubmit your assignment.]"
         });
+        return;
       }
+      
+      console.log(`Vision processing submission ${submission.id} for student ${submission.studentName}...`);
+      
+      // Convert base64 back to buffer and process with full Vision API
+      const fileBuffer = Buffer.from(submission.rawFileData, 'base64');
+      const processedFile = await processUploadedFile(
+        fileBuffer,
+        submission.fileName || 'file',
+        submission.fileMimeType,
+        false // Full processing with Vision API
+      );
+      
+      // Update submission with extracted content and clear raw file data
+      await storage.updateSubmission(submission.id, {
+        content: processedFile.content,
+        needsVisionProcessing: false,
+        rawFileData: null, // Clear raw data to save space
+      });
+      
+      console.log(`Vision processing completed for submission ${submission.id}`);
+      
+      // Now grade the submission if not already graded
+      const assignment = await storage.getAssignment(submission.assignmentId);
+      if (assignment) {
+        const existingResult = await storage.getGradingResult(submission.id);
+        if (!existingResult) {
+          console.log(`Grading submission ${submission.id}...`);
+          const gradingResult = await gradeAssignment({
+            caseStudyContent: assignment.caseStudyContent,
+            studentResponse: processedFile.content,
+            maxPoints: assignment.maxPoints,
+            assignmentTitle: assignment.title,
+          });
+
+          await storage.createGradingResult({
+            submissionId: submission.id,
+            aiAnalysis: gradingResult,
+            finalScore: gradingResult.score,
+            maxScore: gradingResult.maxScore,
+            percentage: gradingResult.percentage,
+            feedback: gradingResult.feedback,
+          });
+          
+          console.log(`Grading completed for submission ${submission.id}: ${gradingResult.grade}`);
+        } else {
+          console.log(`Submission ${submission.id} already graded, updating content only.`);
+        }
+      }
+    } catch (error) {
+      console.error(`Failed to Vision-process submission ${submission.id}:`, error);
+      // Mark as complete to avoid retrying forever
+      await storage.updateSubmission(submission.id, { 
+        needsVisionProcessing: false,
+        content: `[Vision processing failed: ${(error as Error).message}. Please resubmit your assignment.]`
+      });
     }
     
-    console.log("Finished Vision processing.");
+    console.log("Finished Vision processing cycle.");
   } catch (error) {
     console.error("Error in Vision processor:", error);
+  } finally {
+    isVisionProcessing = false;
   }
 }
 
