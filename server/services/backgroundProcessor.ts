@@ -4,19 +4,37 @@ import { gradeAssignment } from "./openai";
 
 // Lock to prevent concurrent Vision processing
 let isVisionProcessing = false;
+let lastProcessingStart: number | null = null;
+
+// Helper to add timeout to promises
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number, errorMsg: string): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<T>((_, reject) => 
+      setTimeout(() => reject(new Error(errorMsg)), timeoutMs)
+    )
+  ]);
+}
 
 // Process submissions that need Vision API processing for image-based content
 export async function processVisionSubmissions(): Promise<void> {
-  // Skip if already processing
+  // Skip if already processing (with safety timeout of 3 minutes)
   if (isVisionProcessing) {
-    console.log("Vision processing already in progress, skipping...");
-    return;
+    const now = Date.now();
+    if (lastProcessingStart && (now - lastProcessingStart) > 180000) {
+      console.log("Vision processing stuck for 3+ minutes, resetting lock...");
+      isVisionProcessing = false;
+    } else {
+      console.log("Vision processing already in progress, skipping...");
+      return;
+    }
   }
   
   console.log("Checking for submissions needing Vision processing...");
   
   try {
     isVisionProcessing = true;
+    lastProcessingStart = Date.now();
     
     const visionSubmissions = await storage.getSubmissionsNeedingVisionProcessing();
     
@@ -44,11 +62,17 @@ export async function processVisionSubmissions(): Promise<void> {
       
       // Convert base64 back to buffer and process with full Vision API
       const fileBuffer = Buffer.from(submission.rawFileData, 'base64');
-      const processedFile = await processUploadedFile(
-        fileBuffer,
-        submission.fileName || 'file',
-        submission.fileMimeType,
-        false // Full processing with Vision API
+      
+      // Add 2 minute total timeout for file processing
+      const processedFile = await withTimeout(
+        processUploadedFile(
+          fileBuffer,
+          submission.fileName || 'file',
+          submission.fileMimeType,
+          false // Full processing with Vision API
+        ),
+        120000,
+        "File processing timeout after 2 minutes"
       );
       
       // Update submission with extracted content and clear raw file data
@@ -66,12 +90,16 @@ export async function processVisionSubmissions(): Promise<void> {
         const existingResult = await storage.getGradingResult(submission.id);
         if (!existingResult) {
           console.log(`Grading submission ${submission.id}...`);
-          const gradingResult = await gradeAssignment({
-            caseStudyContent: assignment.caseStudyContent,
-            studentResponse: processedFile.content,
-            maxPoints: assignment.maxPoints,
-            assignmentTitle: assignment.title,
-          });
+          const gradingResult = await withTimeout(
+            gradeAssignment({
+              caseStudyContent: assignment.caseStudyContent,
+              studentResponse: processedFile.content,
+              maxPoints: assignment.maxPoints,
+              assignmentTitle: assignment.title,
+            }),
+            60000,
+            "Grading timeout after 60 seconds"
+          );
 
           await storage.createGradingResult({
             submissionId: submission.id,
@@ -81,6 +109,8 @@ export async function processVisionSubmissions(): Promise<void> {
             percentage: gradingResult.percentage,
             feedback: gradingResult.feedback,
           });
+          
+          await storage.updateSubmission(submission.id, { isGraded: true });
           
           console.log(`Grading completed for submission ${submission.id}: ${gradingResult.grade}`);
         } else {
@@ -101,6 +131,7 @@ export async function processVisionSubmissions(): Promise<void> {
     console.error("Error in Vision processor:", error);
   } finally {
     isVisionProcessing = false;
+    lastProcessingStart = null;
   }
 }
 
@@ -136,8 +167,12 @@ export async function processPendingSubmissions(): Promise<void> {
           continue;
         }
         
-        if (submission.content.startsWith('[Processing file...]') || submission.content.startsWith('[File processing failed') || submission.content.startsWith('[Processing images')) {
-          console.log(`Submission ${submission.id} has processing placeholder, cannot reprocess without original file.`);
+        // Skip submissions with placeholder content
+        if (submission.content.startsWith('[Processing') || 
+            submission.content.startsWith('[File processing') ||
+            submission.content.startsWith('[Error') ||
+            submission.content.startsWith('[Vision')) {
+          console.log(`Submission ${submission.id} has placeholder content, skipping.`);
           continue;
         }
         

@@ -3,7 +3,7 @@ import mammoth from "mammoth";
 import * as XLSX from "xlsx";
 import * as pdfjsLib from "pdfjs-dist/legacy/build/pdf.mjs";
 import JSZip from "jszip";
-import { extractTextFromImage, extractTextFromMultipleImages } from "./openai";
+import { extractTextFromImage, extractTextFromMultipleImages, extractTextFromPDFWithVision } from "./openai";
 
 export interface ProcessedFile {
   id: string;
@@ -169,57 +169,36 @@ export async function processUploadedFile(
       const loadingTask = pdfjsLib.getDocument({ data: new Uint8Array(fileBuffer) });
       const pdfDocument = await loadingTask.promise;
       const textParts: string[] = [];
-      const pdfImages: Array<{base64: string, mimeType: string}> = [];
+      let totalTextLength = 0;
       
       for (let pageNum = 1; pageNum <= pdfDocument.numPages; pageNum++) {
         const page = await pdfDocument.getPage(pageNum);
         const textContent = await page.getTextContent();
-        const pageText = textContent.items.map((item: any) => item.str).join(' ');
+        const pageText = textContent.items.map((item: any) => item.str).join(' ').trim();
         textParts.push(`--- Page ${pageNum} ---\n${pageText}`);
-        
-        // Skip image extraction in fast mode (this is the slow part)
-        if (!fastMode) {
-          try {
-            const operatorList = await page.getOperatorList();
-            const objs = page.objs;
-            
-            for (let i = 0; i < operatorList.fnArray.length; i++) {
-              // OPS.paintImageXObject = 85
-              if (operatorList.fnArray[i] === 85) {
-                const imgName = operatorList.argsArray[i][0];
-                try {
-                  const imgData = await new Promise<any>((resolve, reject) => {
-                    objs.get(imgName, (data: any) => {
-                      if (data) resolve(data);
-                      else reject(new Error('No image data'));
-                    });
-                  });
-                  
-                  if (imgData && imgData.data && imgData.width > 50 && imgData.height > 50) {
-                    // Convert raw image data to PNG base64
-                    const canvas = createImageCanvas(imgData);
-                    if (canvas) {
-                      pdfImages.push({ base64: canvas, mimeType: 'image/png' });
-                    }
-                  }
-                } catch (e) {
-                  // Skip images that can't be extracted
-                }
-              }
-            }
-          } catch (e) {
-            // Page image extraction failed, continue with text
-          }
-        }
+        totalTextLength += pageText.length;
       }
       
       content = textParts.join('\n\n');
       
-      // Process any extracted images with Vision API (skip in fast mode)
-      if (!fastMode && pdfImages.length > 0) {
-        const imageText = await extractTextFromMultipleImages(pdfImages.slice(0, 10)); // Limit to 10 images
-        if (imageText.trim()) {
-          content += "\n\n=== Content from PDF Images ===\n\n" + imageText;
+      // Check if PDF has very little text (likely scanned/image-based)
+      const averageTextPerPage = totalTextLength / pdfDocument.numPages;
+      const isImageBasedPDF = averageTextPerPage < 50; // Less than 50 chars per page on average
+      
+      console.log(`PDF processed: ${pdfDocument.numPages} pages, ${totalTextLength} total chars, avg ${averageTextPerPage.toFixed(0)} chars/page, image-based: ${isImageBasedPDF}`);
+      
+      // If image-based PDF and not in fast mode, use Vision API to extract content
+      if (isImageBasedPDF && !fastMode) {
+        console.log("Detected image-based PDF, using Vision API for full extraction...");
+        try {
+          const pdfBase64 = fileBuffer.toString('base64');
+          const visionContent = await extractTextFromPDFWithVision(pdfBase64);
+          if (visionContent && visionContent.trim().length > 50) {
+            content = visionContent;
+          }
+        } catch (visionError) {
+          console.error("Vision PDF extraction failed:", visionError);
+          // Keep the original text extraction result
         }
       }
     } 

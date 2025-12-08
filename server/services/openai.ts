@@ -111,9 +111,25 @@ export async function extractTextFromContent(content: string, fileName?: string)
   }
 }
 
+// Helper function to add timeout to promises
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number, errorMsg: string): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<T>((_, reject) => 
+      setTimeout(() => reject(new Error(errorMsg)), timeoutMs)
+    )
+  ]);
+}
+
 export async function extractTextFromImage(imageBase64: string, mimeType: string): Promise<string> {
   try {
-    const response = await openai.chat.completions.create({
+    // Limit base64 size - if too large, skip
+    if (imageBase64.length > 5 * 1024 * 1024) { // 5MB base64 limit
+      console.log("Image too large for Vision API, skipping...");
+      return "[Image too large for processing]";
+    }
+
+    const apiCall = openai.chat.completions.create({
       model: "gpt-4o",
       messages: [
         {
@@ -156,6 +172,8 @@ Preserve the structure and flow of the content. If you cannot read something cle
       max_tokens: 4096
     });
 
+    // Add 60 second timeout per image
+    const response = await withTimeout(apiCall, 60000, "Vision API timeout after 60 seconds");
     return response.choices[0].message.content || "";
   } catch (error) {
     console.error("Error extracting text from image:", error);
@@ -179,4 +197,58 @@ export async function extractTextFromMultipleImages(images: Array<{base64: strin
   }
   
   return results.join('\n\n');
+}
+
+// Process an entire PDF file with GPT-4o Vision by sending it as base64
+export async function extractTextFromPDFWithVision(pdfBase64: string): Promise<string> {
+  try {
+    // PDF files can be quite large - check size
+    const base64SizeMB = (pdfBase64.length * 3 / 4) / (1024 * 1024);
+    console.log(`Processing PDF with Vision API, size: ${base64SizeMB.toFixed(2)} MB`);
+    
+    if (base64SizeMB > 15) {
+      return "[PDF too large for Vision processing - maximum 15MB. Please submit a smaller file.]";
+    }
+
+    const apiCall = openai.chat.completions.create({
+      model: "gpt-4o",
+      messages: [
+        {
+          role: "system",
+          content: `You are an expert at reading and transcribing content from PDF documents, especially student assignments and academic work. You excel at:
+
+1. HANDWRITTEN TEXT: Carefully read and transcribe handwritten content, even if messy or difficult to read.
+2. PRINTED TEXT: Extract all typed/printed text including headings, paragraphs, bullet points.
+3. SCANNED DOCUMENTS: Handle scanned pages with text, images, diagrams.
+4. MIXED CONTENT: Process documents combining text, images, charts, and handwriting.
+5. PRESENTATION SLIDES: Extract content from slide-based PDFs.
+
+Extract ALL visible text from every page. Preserve structure and formatting. For diagrams, describe what you see and extract any text labels.`
+        },
+        {
+          role: "user",
+          content: [
+            {
+              type: "text",
+              text: "Please extract ALL text content from this PDF document. This is a student assignment submission. Read every page carefully and transcribe all visible text including handwritten content, printed text, slide content, diagram labels, and annotations. Organize the output by page if there are multiple pages."
+            },
+            {
+              type: "file",
+              file: {
+                filename: "document.pdf",
+                file_data: `data:application/pdf;base64,${pdfBase64}`
+              }
+            } as any
+          ]
+        }
+      ],
+      max_tokens: 8192
+    });
+
+    const response = await withTimeout(apiCall, 120000, "PDF Vision API timeout after 2 minutes");
+    return response.choices[0].message.content || "";
+  } catch (error) {
+    console.error("Error extracting text from PDF with Vision:", error);
+    throw error; // Re-throw to let caller handle
+  }
 }
