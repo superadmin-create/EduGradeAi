@@ -160,7 +160,19 @@ export class DatabaseStorage implements IStorage {
   }
 
   async deleteAssignment(id: string): Promise<boolean> {
-    const result = await db.delete(assignments).where(eq(assignments.id, id));
+    // First get all submissions for this assignment
+    const assignmentSubmissions = await this.getSubmissions(id);
+    
+    // Delete grading results for each submission
+    for (const submission of assignmentSubmissions) {
+      await db.delete(gradingResults).where(eq(gradingResults.submissionId, submission.id));
+    }
+    
+    // Delete all submissions for this assignment
+    await db.delete(submissions).where(eq(submissions.assignmentId, id));
+    
+    // Finally delete the assignment
+    await db.delete(assignments).where(eq(assignments.id, id));
     return true;
   }
 
