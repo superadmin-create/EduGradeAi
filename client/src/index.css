@@ -8,7 +8,7 @@
   --foreground: hsl(0deg 0% 100%);
   --card: hsl(0deg 0% 0%);
   --card-foreground: hsl(0deg 0% 100%);
-  --popover: hsl(0, 0%, 100%);
+  --popover: hsl(0deg 0% 0%);
   --popover-foreground: hsl(0deg 0% 100%);
   --primary: hsl(210, 83%, 53%);
   --primary-foreground: hsl(0, 0%, 100%);

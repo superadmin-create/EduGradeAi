@@ -1,6 +1,6 @@
 import { type User, type InsertUser, type Assignment, type InsertAssignment, type Submission, type InsertSubmission, type GradingResult, type InsertGradingResult, type College, type InsertCollege, users, assignments, submissions, gradingResults, colleges } from "@shared/schema";
 import { db } from "./db";
-import { eq, and, sql } from "drizzle-orm";
+import { eq, and, sql, or, like } from "drizzle-orm";
 
 export interface IStorage {
   getCollege(id: string): Promise<College | undefined>;
@@ -32,6 +32,8 @@ export interface IStorage {
   getGradingResult(submissionId: string): Promise<GradingResult | undefined>;
   getGradingResults(assignmentId: string): Promise<GradingResult[]>;
   createGradingResult(result: InsertGradingResult): Promise<GradingResult>;
+  
+  getPendingSubmissions(): Promise<Submission[]>;
 
   getAssignmentStats(userId: string): Promise<{
     totalAssignments: number;
@@ -46,7 +48,7 @@ export interface IStorage {
     totalStudents: number;
     averageGrade: number;
     quotaUsed: number;
-    quotaTotal: number | null;
+    quotaTotal: number | null | undefined;
   }>;
 }
 
@@ -247,6 +249,15 @@ export class DatabaseStorage implements IStorage {
     return result;
   }
 
+  async getPendingSubmissions(): Promise<Submission[]> {
+    return db.select().from(submissions).where(
+      or(
+        eq(submissions.isGraded, false),
+        like(submissions.content, '[Processing file...]%')
+      )
+    );
+  }
+
   async getAssignmentStats(userId: string): Promise<{
     totalAssignments: number;
     pendingGrading: number;
@@ -291,7 +302,7 @@ export class DatabaseStorage implements IStorage {
     totalStudents: number;
     averageGrade: number;
     quotaUsed: number;
-    quotaTotal: number;
+    quotaTotal: number | null | undefined;
   }> {
     const college = await this.getCollege(collegeId);
     if (!college) {
@@ -335,7 +346,7 @@ export class DatabaseStorage implements IStorage {
       totalStudents: studentIds.size,
       averageGrade,
       quotaUsed: college.usedQuota,
-      quotaTotal: college.quota,
+      quotaTotal: college.quota ?? null,
     };
   }
 }

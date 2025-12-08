@@ -615,57 +615,43 @@ export async function registerRoutes(app: Express): Promise<Server> {
         validateFileUpload(req.file);
       }
 
-      // Store file info for background processing
-      const fileBuffer = req.file ? Buffer.from(req.file.buffer) : null;
-      const fileOriginalName = req.file?.originalname || null;
-      const fileMimeType = req.file?.mimetype || null;
-      const textContent = req.body.content || null;
+      let content = "";
+      let fileName = null;
 
-      // Create submission with placeholder content (will be updated after processing)
+      // Process file synchronously to ensure content is saved (prevents data loss on restart)
+      if (req.file) {
+        const processedFile = await processUploadedFile(
+          req.file.buffer,
+          req.file.originalname,
+          req.file.mimetype
+        );
+        content = processedFile.content;
+        fileName = processedFile.originalName;
+      } else if (req.body.content) {
+        content = req.body.content;
+      }
+
+      // Create submission with actual content
       const submission = await storage.createSubmission({
         assignmentId: assignment.id,
         studentName,
         studentId,
-        content: textContent || "[Processing file...]",
-        fileName: fileOriginalName,
+        content,
+        fileName,
       });
 
-      // Immediately respond to student - don't make them wait
+      // Respond to student after file processing but before grading
       res.status(201).json({ 
-        message: "Submission received successfully! Your assignment is being processed and graded.",
+        message: "Submission received successfully! Your assignment is being graded.",
         submissionId: submission.id,
         studentName: submission.studentName,
         submittedAt: submission.submittedAt
       });
 
-      // Process file and grade in the background
-      (async () => {
-        try {
-          let content = textContent || "";
-          
-          // Process file if uploaded
-          if (fileBuffer && fileOriginalName && fileMimeType) {
-            try {
-              const processedFile = await processUploadedFile(
-                fileBuffer,
-                fileOriginalName,
-                fileMimeType
-              );
-              content = processedFile.content;
-              
-              // Update submission with processed content
-              await storage.updateSubmission(submission.id, { content });
-            } catch (processError) {
-              console.error("Failed to process file:", processError);
-              await storage.updateSubmission(submission.id, { 
-                content: "[File processing failed. Please resubmit or contact admin.]" 
-              });
-              return;
-            }
-          }
-
-          // Auto-grade if college has quota available
-          if (college.quota === null || college.usedQuota < college.quota) {
+      // Grade in the background (the slower part)
+      if (college.quota === null || college.usedQuota < college.quota) {
+        (async () => {
+          try {
             const gradingResult = await gradeAssignment({
               caseStudyContent: assignment.caseStudyContent,
               studentResponse: content,
@@ -683,12 +669,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
             });
             
             await storage.incrementCollegeUsedQuota(college.id);
-            console.log(`Background processing and grading completed for submission ${submission.id}`);
+            console.log(`Background grading completed for submission ${submission.id}: ${gradingResult.grade}`);
+          } catch (gradingError) {
+            console.error("Failed to grade submission:", gradingError);
           }
-        } catch (error) {
-          console.error("Failed to process/grade submission:", error);
-        }
-      })();
+        })();
+      }
     } catch (error) {
       res.status(400).json({ message: "Failed to submit assignment", error: (error as Error).message });
     }
