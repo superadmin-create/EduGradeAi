@@ -4,7 +4,17 @@ import { setupVite, serveStatic, log } from "./vite";
 
 const app = express();
 
-// Health check endpoint - must be before any middleware that might block
+// Health check endpoints - must be before any middleware that might block
+// Root path health check for Autoscale
+app.get("/", (req, res, next) => {
+  // Only respond to health checks, let other requests through to frontend
+  const userAgent = req.headers["user-agent"] || "";
+  if (userAgent.includes("HealthCheck") || req.headers["x-replit-healthcheck"]) {
+    return res.status(200).send("OK");
+  }
+  next();
+});
+
 app.get("/health", (_req, res) => {
   res.status(200).json({ status: "ok", timestamp: new Date().toISOString() });
 });
