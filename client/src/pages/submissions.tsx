@@ -36,6 +36,7 @@ export default function Submissions() {
   const [selectedAssignment, setSelectedAssignment] = useState<string>(assignmentFromQuery);
   const [uploadModalOpen, setUploadModalOpen] = useState(false);
   const [exportDate, setExportDate] = useState<Date | undefined>(undefined);
+  const [appliedDateFilter, setAppliedDateFilter] = useState<Date | undefined>(undefined);
   const [isExporting, setIsExporting] = useState(false);
 
   const deleteSubmissionMutation = useMutation({
@@ -124,12 +125,22 @@ export default function Submissions() {
     enabled: !!assignments,
   });
 
-  // Filter submissions based on search query
-  const filteredSubmissions = submissions?.filter((submission: Submission) =>
-    submission.studentName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    submission.studentId.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    (submission.assignmentTitle && submission.assignmentTitle.toLowerCase().includes(searchQuery.toLowerCase()))
-  ) || [];
+  // Filter submissions based on search query and date filter
+  const filteredSubmissions = submissions?.filter((submission: Submission) => {
+    // Text search filter
+    const matchesSearch = submission.studentName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      submission.studentId.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (submission.assignmentTitle && submission.assignmentTitle.toLowerCase().includes(searchQuery.toLowerCase()));
+    
+    // Date filter
+    if (appliedDateFilter) {
+      const submissionDate = new Date(submission.submittedAt).toISOString().split('T')[0];
+      const filterDate = format(appliedDateFilter, "yyyy-MM-dd");
+      return matchesSearch && submissionDate === filterDate;
+    }
+    
+    return matchesSearch;
+  }) || [];
 
   const getStatusIcon = (isGraded: boolean) => {
     if (isGraded) {
@@ -340,7 +351,7 @@ export default function Submissions() {
             <PopoverTrigger asChild>
               <Button variant="outline" className="w-48" data-testid="button-date-filter">
                 <Calendar className="mr-2 h-4 w-4" />
-                {exportDate ? format(exportDate, "MMM d, yyyy") : "Filter by date"}
+                {appliedDateFilter ? format(appliedDateFilter, "MMM d, yyyy") : "Filter by date"}
               </Button>
             </PopoverTrigger>
             <PopoverContent className="w-auto p-0" align="start">
@@ -350,18 +361,33 @@ export default function Submissions() {
                 onSelect={setExportDate}
                 initialFocus
               />
-              {exportDate && (
-                <div className="p-2 border-t">
+              <div className="p-2 border-t space-y-2">
+                <Button 
+                  size="sm" 
+                  onClick={() => {
+                    setAppliedDateFilter(exportDate);
+                  }}
+                  className="w-full"
+                  disabled={!exportDate}
+                  data-testid="button-apply-date-filter"
+                >
+                  Apply Filter
+                </Button>
+                {(exportDate || appliedDateFilter) && (
                   <Button 
                     variant="ghost" 
                     size="sm" 
-                    onClick={() => setExportDate(undefined)}
+                    onClick={() => {
+                      setExportDate(undefined);
+                      setAppliedDateFilter(undefined);
+                    }}
                     className="w-full"
+                    data-testid="button-clear-date-filter"
                   >
                     Clear date filter
                   </Button>
-                </div>
-              )}
+                )}
+              </div>
             </PopoverContent>
           </Popover>
           
