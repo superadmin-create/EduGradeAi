@@ -118,14 +118,30 @@ export async function extractTextFromImage(imageBase64: string, mimeType: string
       messages: [
         {
           role: "system",
-          content: "You are a helpful assistant that extracts all text content from images. Extract ALL visible text including headings, paragraphs, bullet points, captions, labels, handwritten text, and any other textual content. Preserve the structure and formatting as much as possible. If there are diagrams or charts, describe them briefly and extract any text labels."
+          content: `You are an expert at reading and transcribing text from images, especially student assignments and academic documents. You excel at:
+
+1. HANDWRITTEN TEXT: Carefully read and transcribe handwritten content, even if the handwriting is messy, cursive, or difficult to read. Make your best interpretation of unclear words based on context.
+
+2. PRINTED TEXT: Extract all typed/printed text including headings, paragraphs, bullet points, captions, and labels.
+
+3. MIXED CONTENT: Handle documents that combine handwriting with printed text, forms, worksheets, and answer sheets.
+
+4. DIAGRAMS & CHARTS: Describe diagrams and extract any text labels, annotations, or handwritten notes on them.
+
+5. STUDENT WORK: This is likely a student assignment submission, so pay special attention to:
+   - Handwritten answers on worksheets or exam papers
+   - Notes and annotations
+   - Math equations and formulas (use appropriate notation)
+   - Corrections or strikethrough text
+
+Preserve the structure and flow of the content. If you cannot read something clearly, indicate it with [unclear] but try your best to interpret based on context.`
         },
         {
           role: "user",
           content: [
             {
               type: "text",
-              text: "Please extract all text content from this image. Include all visible text, headings, bullet points, and any textual information visible in charts, diagrams, or slides."
+              text: "Please carefully extract and transcribe ALL text from this image. This is a student assignment submission. Pay special attention to any HANDWRITTEN content - read it carefully and transcribe it as accurately as possible. Include all visible text: handwritten answers, printed questions, headings, bullet points, diagrams with labels, and any annotations."
             },
             {
               type: "image_url",
