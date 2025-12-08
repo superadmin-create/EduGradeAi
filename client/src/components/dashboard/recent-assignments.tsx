@@ -34,6 +34,39 @@ export default function RecentAssignments() {
     queryKey: ["/api/assignments"],
   });
 
+  // Fetch submission counts and grading progress for each assignment
+  const { data: assignmentStats = {} } = useQuery<Record<string, { submissions: number; graded: number }>>({
+    queryKey: ["/api/assignments", "dashboard-stats"],
+    queryFn: async () => {
+      if (!assignments) return {};
+      
+      const stats: Record<string, { submissions: number; graded: number }> = {};
+      
+      for (const assignment of assignments) {
+        try {
+          const response = await fetch(`/api/assignments/${assignment.id}/submissions`, {
+            credentials: "include",
+          });
+          if (response.ok) {
+            const submissions = await response.json();
+            const gradedCount = submissions.filter((s: any) => s.isGraded).length;
+            stats[assignment.id] = { 
+              submissions: submissions.length, 
+              graded: gradedCount 
+            };
+          } else {
+            stats[assignment.id] = { submissions: 0, graded: 0 };
+          }
+        } catch {
+          stats[assignment.id] = { submissions: 0, graded: 0 };
+        }
+      }
+      
+      return stats;
+    },
+    enabled: !!assignments && assignments.length > 0,
+  });
+
   const deleteAssignmentMutation = useMutation({
     mutationFn: async (id: string) => {
       await apiRequest("DELETE", `/api/assignments/${id}`);
@@ -166,7 +199,9 @@ export default function RecentAssignments() {
               <div className="space-y-2">
                 <div className="flex items-center text-sm text-muted-foreground">
                   <Users className="mr-2 w-4 h-4" />
-                  <span>0 submissions</span>
+                  <span data-testid={`text-submissions-${assignment.id}`}>
+                    {assignmentStats[assignment.id]?.submissions || 0} submissions
+                  </span>
                 </div>
                 
                 <div className="flex items-center text-sm text-muted-foreground">
@@ -176,13 +211,23 @@ export default function RecentAssignments() {
               </div>
               
               <div className="mt-4">
-                <div className="flex items-center justify-between text-xs text-muted-foreground mb-1">
-                  <span>Grading Progress</span>
-                  <span>0%</span>
-                </div>
-                <div className="w-full bg-muted rounded-full h-2">
-                  <div className="progress-bar h-2 rounded-full" style={{ width: "0%" }}></div>
-                </div>
+                {(() => {
+                  const stats = assignmentStats[assignment.id];
+                  const progress = stats && stats.submissions > 0 
+                    ? Math.round((stats.graded / stats.submissions) * 100) 
+                    : 0;
+                  return (
+                    <>
+                      <div className="flex items-center justify-between text-xs text-muted-foreground mb-1">
+                        <span>Grading Progress</span>
+                        <span>{progress}%</span>
+                      </div>
+                      <div className="w-full bg-muted rounded-full h-2">
+                        <div className="progress-bar h-2 rounded-full" style={{ width: `${progress}%` }}></div>
+                      </div>
+                    </>
+                  );
+                })()}
               </div>
             </div>
           ))}
