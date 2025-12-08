@@ -1,8 +1,21 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link } from "wouter";
-import { Users, Calendar, ArrowRight } from "lucide-react";
+import { Users, Calendar, ArrowRight, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { useToast } from "@/hooks/use-toast";
+import { apiRequest } from "@/lib/queryClient";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 
 interface Assignment {
   id: string;
@@ -14,8 +27,32 @@ interface Assignment {
 }
 
 export default function RecentAssignments() {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  
   const { data: assignments, isLoading } = useQuery<Assignment[]>({
     queryKey: ["/api/assignments"],
+  });
+
+  const deleteAssignmentMutation = useMutation({
+    mutationFn: async (id: string) => {
+      await apiRequest("DELETE", `/api/assignments/${id}`);
+    },
+    onSuccess: () => {
+      toast({
+        title: "Deleted",
+        description: "Assignment deleted successfully",
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/assignments"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/stats"] });
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to delete assignment",
+        variant: "destructive",
+      });
+    },
   });
 
   if (isLoading) {
@@ -87,12 +124,43 @@ export default function RecentAssignments() {
           {recentAssignments.map((assignment) => (
             <div 
               key={assignment.id} 
-              className="assignment-card p-4 rounded-lg cursor-pointer"
+              className="assignment-card p-4 rounded-lg"
               data-testid={`card-assignment-${assignment.id}`}
             >
               <div className="flex items-center justify-between mb-3">
-                <h4 className="font-medium text-foreground truncate">{assignment.title}</h4>
-                {getStatusBadge(assignment)}
+                <h4 className="font-medium text-foreground truncate flex-1">{assignment.title}</h4>
+                <div className="flex items-center gap-2">
+                  {getStatusBadge(assignment)}
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <Button 
+                        variant="ghost" 
+                        size="icon" 
+                        className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                        data-testid={`button-delete-assignment-${assignment.id}`}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>Delete Assignment</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          Are you sure you want to delete "{assignment.title}"? This will also delete all submissions and grades for this assignment. This action cannot be undone.
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction
+                          onClick={() => deleteAssignmentMutation.mutate(assignment.id)}
+                          className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                        >
+                          Delete
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                </div>
               </div>
               
               <div className="space-y-2">

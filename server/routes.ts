@@ -230,6 +230,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Delete submission
+  app.delete("/api/submissions/:id", requireAuth, async (req, res) => {
+    try {
+      const deleted = await storage.deleteSubmission(req.params.id);
+      if (!deleted) {
+        return res.status(404).json({ message: "Submission not found" });
+      }
+      res.status(204).send();
+    } catch (error) {
+      res.status(500).json({ message: "Failed to delete submission" });
+    }
+  });
+
   // Submission routes
   app.get("/api/assignments/:id/submissions", requireAuth, async (req, res) => {
     try {

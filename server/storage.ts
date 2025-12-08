@@ -27,6 +27,7 @@ export interface IStorage {
   getSubmissionsByStudent(studentId: string): Promise<Submission[]>;
   createSubmission(submission: InsertSubmission): Promise<Submission>;
   updateSubmission(id: string, submission: Partial<Submission>): Promise<Submission | undefined>;
+  deleteSubmission(id: string): Promise<boolean>;
 
   getGradingResult(submissionId: string): Promise<GradingResult | undefined>;
   getGradingResults(assignmentId: string): Promise<GradingResult[]>;
@@ -190,6 +191,14 @@ export class DatabaseStorage implements IStorage {
       .where(eq(submissions.id, id))
       .returning();
     return updated;
+  }
+
+  async deleteSubmission(id: string): Promise<boolean> {
+    // First delete any associated grading results
+    await db.delete(gradingResults).where(eq(gradingResults.submissionId, id));
+    // Then delete the submission
+    await db.delete(submissions).where(eq(submissions.id, id));
+    return true;
   }
 
   async getGradingResult(submissionId: string): Promise<GradingResult | undefined> {

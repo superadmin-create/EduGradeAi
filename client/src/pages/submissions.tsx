@@ -1,7 +1,7 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
-import { Search, FileText, User, Calendar, CheckCircle, Clock, Download, FileSpreadsheet } from "lucide-react";
+import { Search, FileText, User, Calendar, CheckCircle, Clock, Download, FileSpreadsheet, Trash2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -12,10 +12,23 @@ import { Calendar as CalendarComponent } from "@/components/ui/calendar";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 import UploadModal from "@/components/submissions/upload-modal";
+import { apiRequest } from "@/lib/queryClient";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 
 export default function Submissions() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
+  const queryClient = useQueryClient();
   const searchParams = new URLSearchParams(window.location.search);
   const assignmentFromQuery = searchParams.get('assignment') || "all";
   
@@ -24,6 +37,27 @@ export default function Submissions() {
   const [uploadModalOpen, setUploadModalOpen] = useState(false);
   const [exportDate, setExportDate] = useState<Date | undefined>(undefined);
   const [isExporting, setIsExporting] = useState(false);
+
+  const deleteSubmissionMutation = useMutation({
+    mutationFn: async (id: string) => {
+      await apiRequest("DELETE", `/api/submissions/${id}`);
+    },
+    onSuccess: () => {
+      toast({
+        title: "Deleted",
+        description: "Submission deleted successfully",
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/assignments"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/stats"] });
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to delete submission",
+        variant: "destructive",
+      });
+    },
+  });
 
   interface Assignment {
     id: string;
@@ -407,14 +441,45 @@ export default function Submissions() {
                     </div>
                     {getStatusBadge(submission.isGraded)}
                   </div>
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
-                    onClick={() => setLocation(`/grading-results?submissionId=${submission.id}`)}
-                    data-testid={`button-view-submission-${submission.id}`}
-                  >
-                    View Details
-                  </Button>
+                  <div className="flex items-center gap-2">
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      onClick={() => setLocation(`/grading-results?submissionId=${submission.id}`)}
+                      data-testid={`button-view-submission-${submission.id}`}
+                    >
+                      View Details
+                    </Button>
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                        <Button 
+                          variant="ghost" 
+                          size="icon"
+                          className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                          data-testid={`button-delete-submission-${submission.id}`}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>Delete Submission</AlertDialogTitle>
+                          <AlertDialogDescription>
+                            Are you sure you want to delete this submission from {submission.studentName}? This will also delete the grading result. This action cannot be undone.
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>Cancel</AlertDialogCancel>
+                          <AlertDialogAction
+                            onClick={() => deleteSubmissionMutation.mutate(submission.id)}
+                            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                          >
+                            Delete
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
+                  </div>
                 </div>
               </CardHeader>
               <CardContent>
