@@ -9,8 +9,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
-import { GraduationCap, Loader2 } from "lucide-react";
+import { GraduationCap, Loader2, KeyRound } from "lucide-react";
 
 const loginSchema = z.object({
   collegeCode: z.string().min(1, "College code is required"),
@@ -27,6 +28,7 @@ interface LoginProps {
 export default function Login({ onLoginSuccess }: LoginProps) {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
+  const [resetDialogOpen, setResetDialogOpen] = useState(false);
 
   const form = useForm<LoginFormData>({
     resolver: zodResolver(loginSchema),
@@ -152,8 +154,56 @@ export default function Login({ onLoginSuccess }: LoginProps) {
               </Button>
             </form>
           </Form>
-          <div className="mt-6 text-center text-sm text-muted-foreground">
-            <p>Contact your administrator for login credentials</p>
+          <div className="mt-6 text-center space-y-3">
+            <Dialog open={resetDialogOpen} onOpenChange={setResetDialogOpen}>
+              <DialogTrigger asChild>
+                <Button 
+                  variant="link" 
+                  className="text-primary p-0 h-auto"
+                  data-testid="button-forgot-password"
+                >
+                  <KeyRound className="w-4 h-4 mr-1" />
+                  Forgot Password?
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="sm:max-w-md">
+                <DialogHeader>
+                  <DialogTitle className="flex items-center gap-2">
+                    <KeyRound className="w-5 h-5" />
+                    Reset Password
+                  </DialogTitle>
+                  <DialogDescription>
+                    To reset your password, please contact your system administrator.
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4 py-4">
+                  <div className="bg-muted p-4 rounded-lg space-y-2">
+                    <p className="text-sm font-medium">Contact Information:</p>
+                    <p className="text-sm text-muted-foreground">
+                      Please reach out to the main administrator (Leapup) to request a password reset for your account.
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      When contacting support, please provide:
+                    </p>
+                    <ul className="text-sm text-muted-foreground list-disc list-inside ml-2">
+                      <li>Your college code</li>
+                      <li>Your username</li>
+                      <li>Proof of identity</li>
+                    </ul>
+                  </div>
+                  <Button 
+                    className="w-full" 
+                    onClick={() => setResetDialogOpen(false)}
+                    data-testid="button-close-reset-dialog"
+                  >
+                    Close
+                  </Button>
+                </div>
+              </DialogContent>
+            </Dialog>
+            <p className="text-sm text-muted-foreground">
+              Contact your administrator for login credentials
+            </p>
           </div>
         </CardContent>
       </Card>
