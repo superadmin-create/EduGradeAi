@@ -527,6 +527,161 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // ======== PUBLIC STUDENT PORTAL ROUTES ========
+  
+  // Get college info for student portal
+  app.get("/api/public/:collegeCode", async (req, res) => {
+    try {
+      const college = await storage.getCollegeByCode(req.params.collegeCode);
+      if (!college || !college.isActive) {
+        return res.status(404).json({ message: "College not found" });
+      }
+      res.json({ id: college.id, name: college.name, code: college.code });
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch college" });
+    }
+  });
+
+  // Get assignments for student portal (public)
+  app.get("/api/public/:collegeCode/assignments", async (req, res) => {
+    try {
+      const college = await storage.getCollegeByCode(req.params.collegeCode);
+      if (!college || !college.isActive) {
+        return res.status(404).json({ message: "College not found" });
+      }
+      
+      const allAssignments = await storage.getAssignmentsByCollege(college.id);
+      // Return only basic info for students (no grading criteria)
+      const publicAssignments = allAssignments.map(a => ({
+        id: a.id,
+        title: a.title,
+        description: a.description,
+        maxPoints: a.maxPoints,
+        dueDate: a.dueDate,
+      }));
+      
+      res.json(publicAssignments);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch assignments" });
+    }
+  });
+
+  // Student submission (public - no auth required)
+  app.post("/api/public/:collegeCode/assignments/:assignmentId/submit", upload.single("file"), async (req, res) => {
+    try {
+      const college = await storage.getCollegeByCode(req.params.collegeCode);
+      if (!college || !college.isActive) {
+        return res.status(404).json({ message: "College not found" });
+      }
+
+      const assignment = await storage.getAssignment(req.params.assignmentId);
+      if (!assignment) {
+        return res.status(404).json({ message: "Assignment not found" });
+      }
+
+      // Verify assignment belongs to this college
+      const collegeAssignments = await storage.getAssignmentsByCollege(college.id);
+      const assignmentBelongsToCollege = collegeAssignments.some(a => a.id === assignment.id);
+      if (!assignmentBelongsToCollege) {
+        return res.status(403).json({ message: "This assignment does not belong to this college" });
+      }
+
+      // Validate student name and ID
+      const { studentName, studentId } = req.body;
+      if (!studentName || !studentId) {
+        return res.status(400).json({ message: "Student name and ID are required" });
+      }
+
+      let content = "";
+      let fileName = null;
+
+      // Handle file upload
+      if (req.file) {
+        validateFileUpload(req.file);
+        const processedFile = await processUploadedFile(
+          req.file.buffer,
+          req.file.originalname,
+          req.file.mimetype
+        );
+        content = processedFile.content;
+        fileName = processedFile.originalName;
+      } else if (req.body.content) {
+        content = req.body.content;
+      } else {
+        return res.status(400).json({ message: "File or content is required" });
+      }
+
+      const submission = await storage.createSubmission({
+        assignmentId: assignment.id,
+        studentName,
+        studentId,
+        content,
+        fileName,
+      });
+
+      res.status(201).json({ 
+        message: "Submission received successfully",
+        submissionId: submission.id,
+        studentName: submission.studentName,
+        submittedAt: submission.submittedAt
+      });
+    } catch (error) {
+      res.status(400).json({ message: "Failed to submit assignment", error: (error as Error).message });
+    }
+  });
+
+  // ======== EXPORT ROUTES ========
+  
+  // Get all submissions for a college with optional date filter (for export)
+  app.get("/api/export/submissions", requireAuth, async (req, res) => {
+    try {
+      const collegeId = req.session.collegeId!;
+      const { date, assignmentId } = req.query;
+      
+      const allAssignments = await storage.getAssignmentsByCollege(collegeId);
+      
+      let targetAssignments = allAssignments;
+      if (assignmentId) {
+        targetAssignments = allAssignments.filter(a => a.id === assignmentId);
+      }
+
+      const exportData = [];
+      
+      for (const assignment of targetAssignments) {
+        const assignmentSubmissions = await storage.getSubmissions(assignment.id);
+        
+        for (const submission of assignmentSubmissions) {
+          // Filter by date if provided
+          if (date) {
+            const submissionDate = new Date(submission.submittedAt).toISOString().split('T')[0];
+            if (submissionDate !== date) continue;
+          }
+          
+          const gradingResult = await storage.getGradingResult(submission.id);
+          
+          exportData.push({
+            assignmentTitle: assignment.title,
+            studentName: submission.studentName,
+            studentId: submission.studentId,
+            fileName: submission.fileName,
+            submittedAt: submission.submittedAt,
+            isGraded: submission.isGraded,
+            grade: gradingResult?.aiAnalysis?.grade || null,
+            score: gradingResult?.finalScore || null,
+            maxScore: gradingResult?.maxScore || null,
+            percentage: gradingResult?.percentage || null,
+            feedback: gradingResult?.feedback || null,
+            gradedAt: gradingResult?.gradedAt || null,
+          });
+        }
+      }
+      
+      res.json(exportData);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch export data" });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }

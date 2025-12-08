@@ -1,22 +1,29 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
-import { Search, FileText, User, Calendar, CheckCircle, Clock, AlertCircle } from "lucide-react";
+import { Search, FileText, User, Calendar, CheckCircle, Clock, Download, FileSpreadsheet } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar as CalendarComponent } from "@/components/ui/calendar";
+import { useToast } from "@/hooks/use-toast";
+import { format } from "date-fns";
 import UploadModal from "@/components/submissions/upload-modal";
 
 export default function Submissions() {
   const [, setLocation] = useLocation();
+  const { toast } = useToast();
   const searchParams = new URLSearchParams(window.location.search);
   const assignmentFromQuery = searchParams.get('assignment') || "all";
   
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedAssignment, setSelectedAssignment] = useState<string>(assignmentFromQuery);
   const [uploadModalOpen, setUploadModalOpen] = useState(false);
+  const [exportDate, setExportDate] = useState<Date | undefined>(undefined);
+  const [isExporting, setIsExporting] = useState(false);
 
   interface Assignment {
     id: string;
@@ -104,6 +111,166 @@ export default function Submissions() {
     return <Badge variant="outline">Pending</Badge>;
   };
 
+  const fetchExportData = async () => {
+    const params = new URLSearchParams();
+    if (exportDate) {
+      params.set("date", format(exportDate, "yyyy-MM-dd"));
+    }
+    if (selectedAssignment !== "all") {
+      params.set("assignmentId", selectedAssignment);
+    }
+    
+    const response = await fetch(`/api/export/submissions?${params.toString()}`, {
+      credentials: "include",
+    });
+    
+    if (!response.ok) {
+      throw new Error("Failed to fetch export data");
+    }
+    
+    return response.json();
+  };
+
+  const exportToExcel = async () => {
+    setIsExporting(true);
+    try {
+      const data = await fetchExportData();
+      
+      if (data.length === 0) {
+        toast({
+          title: "No Data",
+          description: "No submissions found for the selected criteria.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      const headers = ["Assignment", "Student Name", "Student ID", "File Name", "Submitted At", "Status", "Grade", "Score", "Max Score", "Percentage", "Feedback"];
+      const rows = data.map((item: any) => [
+        item.assignmentTitle,
+        item.studentName,
+        item.studentId,
+        item.fileName || "Text submission",
+        new Date(item.submittedAt).toLocaleString(),
+        item.isGraded ? "Graded" : "Pending",
+        item.grade || "N/A",
+        item.score || "N/A",
+        item.maxScore || "N/A",
+        item.percentage ? `${item.percentage}%` : "N/A",
+        item.feedback || "Not graded yet",
+      ]);
+
+      const csvContent = [headers, ...rows]
+        .map(row => row.map((cell: string) => `"${String(cell).replace(/"/g, '""')}"`).join(","))
+        .join("\n");
+
+      const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+      const link = document.createElement("a");
+      const url = URL.createObjectURL(blob);
+      link.setAttribute("href", url);
+      link.setAttribute("download", `submissions_${exportDate ? format(exportDate, "yyyy-MM-dd") : "all"}.csv`);
+      link.style.visibility = "hidden";
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      toast({
+        title: "Export Successful",
+        description: `Exported ${data.length} submissions to Excel/CSV.`,
+      });
+    } catch (error) {
+      toast({
+        title: "Export Failed",
+        description: (error as Error).message,
+        variant: "destructive",
+      });
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  const exportToWord = async () => {
+    setIsExporting(true);
+    try {
+      const data = await fetchExportData();
+      
+      if (data.length === 0) {
+        toast({
+          title: "No Data",
+          description: "No submissions found for the selected criteria.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      let htmlContent = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <meta charset="utf-8">
+          <title>Submissions Report</title>
+          <style>
+            body { font-family: Arial, sans-serif; margin: 20px; }
+            h1 { color: #333; border-bottom: 2px solid #333; padding-bottom: 10px; }
+            .submission { margin-bottom: 30px; padding: 15px; border: 1px solid #ddd; border-radius: 8px; }
+            .submission-header { font-size: 18px; font-weight: bold; color: #222; margin-bottom: 10px; }
+            .field { margin: 5px 0; }
+            .label { font-weight: bold; color: #555; }
+            .grade { font-size: 24px; font-weight: bold; color: #2563eb; }
+            .feedback { background: #f5f5f5; padding: 10px; border-radius: 4px; margin-top: 10px; }
+          </style>
+        </head>
+        <body>
+          <h1>Submissions Report${exportDate ? ` - ${format(exportDate, "MMMM d, yyyy")}` : ""}</h1>
+      `;
+
+      for (const item of data) {
+        htmlContent += `
+          <div class="submission">
+            <div class="submission-header">${item.studentName} (${item.studentId})</div>
+            <div class="field"><span class="label">Assignment:</span> ${item.assignmentTitle}</div>
+            <div class="field"><span class="label">File:</span> ${item.fileName || "Text submission"}</div>
+            <div class="field"><span class="label">Submitted:</span> ${new Date(item.submittedAt).toLocaleString()}</div>
+            <div class="field"><span class="label">Status:</span> ${item.isGraded ? "Graded" : "Pending"}</div>
+            ${item.isGraded ? `
+              <div class="field"><span class="label">Grade:</span> <span class="grade">${item.grade}</span></div>
+              <div class="field"><span class="label">Score:</span> ${item.score}/${item.maxScore} (${item.percentage}%)</div>
+              <div class="feedback">
+                <span class="label">Feedback:</span><br>
+                ${item.feedback}
+              </div>
+            ` : ""}
+          </div>
+        `;
+      }
+
+      htmlContent += `</body></html>`;
+
+      const blob = new Blob([htmlContent], { type: "application/msword" });
+      const link = document.createElement("a");
+      const url = URL.createObjectURL(blob);
+      link.setAttribute("href", url);
+      link.setAttribute("download", `submissions_${exportDate ? format(exportDate, "yyyy-MM-dd") : "all"}.doc`);
+      link.style.visibility = "hidden";
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      toast({
+        title: "Export Successful",
+        description: `Exported ${data.length} submissions to Word document.`,
+      });
+    } catch (error) {
+      toast({
+        title: "Export Failed",
+        description: (error as Error).message,
+        variant: "destructive",
+      });
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-4">
@@ -134,12 +301,63 @@ export default function Submissions() {
           </Select>
         </div>
         
-        <Button 
-          onClick={() => setLocation('/upload')}
-          data-testid="button-upload-submissions-header"
-        >
-          Upload Submissions
-        </Button>
+        <div className="flex items-center space-x-2">
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button variant="outline" className="w-48" data-testid="button-date-filter">
+                <Calendar className="mr-2 h-4 w-4" />
+                {exportDate ? format(exportDate, "MMM d, yyyy") : "Filter by date"}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0" align="start">
+              <CalendarComponent
+                mode="single"
+                selected={exportDate}
+                onSelect={setExportDate}
+                initialFocus
+              />
+              {exportDate && (
+                <div className="p-2 border-t">
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    onClick={() => setExportDate(undefined)}
+                    className="w-full"
+                  >
+                    Clear date filter
+                  </Button>
+                </div>
+              )}
+            </PopoverContent>
+          </Popover>
+          
+          <Button 
+            variant="outline" 
+            onClick={exportToExcel}
+            disabled={isExporting}
+            data-testid="button-export-excel"
+          >
+            <FileSpreadsheet className="mr-2 h-4 w-4" />
+            Export CSV
+          </Button>
+          
+          <Button 
+            variant="outline" 
+            onClick={exportToWord}
+            disabled={isExporting}
+            data-testid="button-export-word"
+          >
+            <Download className="mr-2 h-4 w-4" />
+            Export Word
+          </Button>
+          
+          <Button 
+            onClick={() => setLocation('/upload')}
+            data-testid="button-upload-submissions-header"
+          >
+            Upload Submissions
+          </Button>
+        </div>
       </div>
 
       {submissionsLoading ? (

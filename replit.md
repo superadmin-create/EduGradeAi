@@ -19,6 +19,30 @@ The application supports multiple colleges with individual login credentials and
 - Quota is consumed when a submission is graded by the AI
 - When quota is exceeded, grading operations are blocked
 - College admins can view their quota usage in the dashboard
+- Null quota represents unlimited grading capability (e.g., Leapup main admin)
+
+## Student Portal
+
+Each college has a dedicated student portal for assignment submissions.
+
+### Accessing the Student Portal
+- URL format: `/student/{COLLEGE_CODE}` (e.g., `/student/SXCA`)
+- No authentication required - students only need their name and student ID
+- Students can select from available assignments and upload their submission files
+
+### Student Portal Features
+- View list of assignments for their college
+- Enter student name and student ID
+- Upload submission files (PDF, DOC, DOCX, TXT, MD supported)
+- Receive confirmation upon successful submission
+
+## Export Functionality
+
+The admin dashboard (Submissions page) includes export features:
+- **Date Filter**: Filter submissions by specific date before exporting
+- **Export CSV**: Download all submissions with grades in CSV format (Excel compatible)
+- **Export Word**: Download detailed submissions report in Word document format
+- Export includes: Assignment title, student info, submission date, grade, score, percentage, and feedback
 
 ## User Preferences
 

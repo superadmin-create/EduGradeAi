@@ -12,6 +12,7 @@ import Submissions from "@/pages/submissions";
 import UploadPage from "@/pages/upload";
 import GradingResults from "@/pages/grading-results";
 import Login from "@/pages/login";
+import StudentPortal from "@/pages/student-portal";
 import NotFound from "@/pages/not-found";
 
 function AuthenticatedRouter() {
@@ -79,7 +80,12 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
         <Toaster />
-        <AppContent />
+        <Switch>
+          <Route path="/student/:collegeCode" component={StudentPortal} />
+          <Route>
+            <AppContent />
+          </Route>
+        </Switch>
       </TooltipProvider>
     </QueryClientProvider>
   );
