@@ -25,6 +25,16 @@ export default function Settings() {
   const collegeCode = session?.college?.code || "";
   const baseUrl = typeof window !== "undefined" ? window.location.origin : "";
 
+  // Generate URL-friendly slug from title
+  const generateSlug = (title: string): string => {
+    return title
+      .toLowerCase()
+      .replace(/[^a-z0-9\s-]/g, '') // Remove special characters
+      .replace(/\s+/g, '-') // Replace spaces with hyphens
+      .replace(/-+/g, '-') // Replace multiple hyphens with single
+      .trim();
+  };
+
   const copyToClipboard = (text: string, label: string) => {
     navigator.clipboard.writeText(text);
     toast({
@@ -33,8 +43,9 @@ export default function Settings() {
     });
   };
 
-  const getPortalLink = (assignmentId: string) => {
-    return `${baseUrl}/student/${collegeCode}/${assignmentId}`;
+  const getPortalLink = (title: string) => {
+    const slug = generateSlug(title);
+    return `${baseUrl}/student/${collegeCode}/${slug}`;
   };
 
   return (
@@ -69,7 +80,7 @@ export default function Settings() {
           ) : (
             <div className="space-y-4">
               {assignments.map((assignment) => {
-                const portalLink = getPortalLink(assignment.id);
+                const portalLink = getPortalLink(assignment.title);
                 return (
                   <div
                     key={assignment.id}

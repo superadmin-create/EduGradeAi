@@ -11,6 +11,16 @@ import { db } from "./db";
 import { users } from "@shared/schema";
 import { eq } from "drizzle-orm";
 
+// Generate URL-friendly slug from title
+function generateSlug(title: string): string {
+  return title
+    .toLowerCase()
+    .replace(/[^a-z0-9\s-]/g, '') // Remove special characters
+    .replace(/\s+/g, '-') // Replace spaces with hyphens
+    .replace(/-+/g, '-') // Replace multiple hyphens with single
+    .trim();
+}
+
 declare module "express-session" {
   interface SessionData {
     userId: string;
@@ -564,9 +574,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       const allAssignments = await storage.getAssignmentsByCollege(college.id);
-      // Return only basic info for students (no grading criteria)
+      // Return only basic info for students (no grading criteria), include slug
       const publicAssignments = allAssignments.map(a => ({
         id: a.id,
+        slug: generateSlug(a.title),
         title: a.title,
         description: a.description,
         maxPoints: a.maxPoints,
@@ -579,29 +590,40 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Get single assignment for student portal (public)
-  app.get("/api/public/:collegeCode/assignments/:assignmentId", async (req, res) => {
+  // Helper function to find assignment by slug or ID
+  async function findAssignmentBySlugOrId(collegeId: string, slugOrId: string) {
+    const collegeAssignments = await storage.getAssignmentsByCollege(collegeId);
+    
+    // First try to find by slug (case-insensitive match)
+    const bySlug = collegeAssignments.find(a => generateSlug(a.title) === slugOrId.toLowerCase());
+    if (bySlug) return bySlug;
+    
+    // Fall back to ID lookup
+    const assignment = await storage.getAssignment(slugOrId);
+    if (assignment && collegeAssignments.some(a => a.id === assignment.id)) {
+      return assignment;
+    }
+    
+    return null;
+  }
+
+  // Get single assignment for student portal (public) - supports slug or ID
+  app.get("/api/public/:collegeCode/assignments/:slugOrId", async (req, res) => {
     try {
       const college = await storage.getCollegeByCode(req.params.collegeCode);
       if (!college || !college.isActive) {
         return res.status(404).json({ message: "College not found" });
       }
       
-      const assignment = await storage.getAssignment(req.params.assignmentId);
+      const assignment = await findAssignmentBySlugOrId(college.id, req.params.slugOrId);
       if (!assignment) {
-        return res.status(404).json({ message: "Assignment not found" });
-      }
-      
-      // Verify assignment belongs to this college
-      const collegeAssignments = await storage.getAssignmentsByCollege(college.id);
-      const assignmentBelongsToCollege = collegeAssignments.some(a => a.id === assignment.id);
-      if (!assignmentBelongsToCollege) {
         return res.status(404).json({ message: "Assignment not found" });
       }
       
       // Return only basic info for students (no grading criteria)
       res.json({
         id: assignment.id,
+        slug: generateSlug(assignment.title),
         title: assignment.title,
         description: assignment.description,
         maxPoints: assignment.maxPoints,
@@ -612,24 +634,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Student submission (public - no auth required)
-  app.post("/api/public/:collegeCode/assignments/:assignmentId/submit", upload.single("file"), async (req, res) => {
+  // Student submission (public - no auth required) - supports slug or ID
+  app.post("/api/public/:collegeCode/assignments/:slugOrId/submit", upload.single("file"), async (req, res) => {
     try {
       const college = await storage.getCollegeByCode(req.params.collegeCode);
       if (!college || !college.isActive) {
         return res.status(404).json({ message: "College not found" });
       }
 
-      const assignment = await storage.getAssignment(req.params.assignmentId);
+      const assignment = await findAssignmentBySlugOrId(college.id, req.params.slugOrId);
       if (!assignment) {
         return res.status(404).json({ message: "Assignment not found" });
-      }
-
-      // Verify assignment belongs to this college
-      const collegeAssignments = await storage.getAssignmentsByCollege(college.id);
-      const assignmentBelongsToCollege = collegeAssignments.some(a => a.id === assignment.id);
-      if (!assignmentBelongsToCollege) {
-        return res.status(403).json({ message: "This assignment does not belong to this college" });
       }
 
       // Validate student name and ID

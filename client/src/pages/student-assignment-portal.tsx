@@ -11,6 +11,7 @@ import { Upload, FileText, CheckCircle, GraduationCap, BookOpen, Calendar, Award
 
 interface PublicAssignment {
   id: string;
+  slug: string;
   title: string;
   description: string | null;
   maxPoints: number;
@@ -26,7 +27,7 @@ interface CollegeInfo {
 export default function StudentAssignmentPortal() {
   const params = useParams();
   const collegeCode = params.collegeCode as string;
-  const assignmentId = params.assignmentId as string;
+  const assignmentSlug = params.assignmentSlug as string;
   const { toast } = useToast();
   
   const [studentName, setStudentName] = useState("");
@@ -45,18 +46,18 @@ export default function StudentAssignmentPortal() {
   });
 
   const { data: assignment, isLoading: assignmentLoading, error: assignmentError } = useQuery<PublicAssignment>({
-    queryKey: ["/api/public", collegeCode, "assignments", assignmentId],
+    queryKey: ["/api/public", collegeCode, "assignments", assignmentSlug],
     queryFn: async () => {
-      const res = await fetch(`/api/public/${collegeCode}/assignments/${assignmentId}`);
+      const res = await fetch(`/api/public/${collegeCode}/assignments/${assignmentSlug}`);
       if (!res.ok) throw new Error("Assignment not found");
       return res.json();
     },
-    enabled: !!college && !!assignmentId,
+    enabled: !!college && !!assignmentSlug,
   });
 
   const submitMutation = useMutation({
     mutationFn: async (formData: FormData) => {
-      const res = await fetch(`/api/public/${collegeCode}/assignments/${assignmentId}/submit`, {
+      const res = await fetch(`/api/public/${collegeCode}/assignments/${assignmentSlug}/submit`, {
         method: "POST",
         body: formData,
       });

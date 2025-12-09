@@ -84,7 +84,7 @@ function App() {
       <TooltipProvider>
         <Toaster />
         <Switch>
-          <Route path="/student/:collegeCode/:assignmentId" component={StudentAssignmentPortal} />
+          <Route path="/student/:collegeCode/:assignmentSlug" component={StudentAssignmentPortal} />
           <Route path="/student/:collegeCode" component={StudentPortal} />
           <Route>
             <AppContent />
