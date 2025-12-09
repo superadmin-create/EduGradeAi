@@ -26,16 +26,24 @@ The application supports multiple colleges with individual login credentials and
 Each college has a dedicated student portal for assignment submissions.
 
 ### Accessing the Student Portal
-- URL format: `/student/{COLLEGE_CODE}` (e.g., `/student/SXCA`)
+- **General Portal**: `/student/{COLLEGE_CODE}` (e.g., `/student/SXCA`) - shows all assignments
+- **Assignment-Specific Portal**: `/student/{COLLEGE_CODE}/{ASSIGNMENT_SLUG}` (e.g., `/student/SXCA/test`)
 - No authentication required - students only need their name and student ID
-- Students can select from available assignments and upload their submission files
+- Assignment slugs are URL-friendly versions of assignment titles (lowercase, spaces replaced with hyphens)
 
 ### Student Portal Features
-- View list of assignments for their college
+- View list of assignments for their college (general portal)
+- Direct link to specific assignment submission (assignment-specific portal)
 - Enter student name and student ID
 - Upload submission files (PDF, DOC, DOCX, PPTX, TXT, MD, PNG, JPG, GIF supported)
 - Automatic AI grading upon submission (if college has available quota)
 - Receive confirmation upon successful submission
+
+### Admin Settings - Portal Links
+- Navigate to Settings page in admin dashboard to view all student portal links
+- Each assignment automatically generates a unique portal link using its slug
+- Links can be copied directly from the Settings page
+- Links update automatically when new assignments are created
 
 ## Export Functionality
 
