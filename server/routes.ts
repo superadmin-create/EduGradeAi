@@ -579,6 +579,39 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Get single assignment for student portal (public)
+  app.get("/api/public/:collegeCode/assignments/:assignmentId", async (req, res) => {
+    try {
+      const college = await storage.getCollegeByCode(req.params.collegeCode);
+      if (!college || !college.isActive) {
+        return res.status(404).json({ message: "College not found" });
+      }
+      
+      const assignment = await storage.getAssignment(req.params.assignmentId);
+      if (!assignment) {
+        return res.status(404).json({ message: "Assignment not found" });
+      }
+      
+      // Verify assignment belongs to this college
+      const collegeAssignments = await storage.getAssignmentsByCollege(college.id);
+      const assignmentBelongsToCollege = collegeAssignments.some(a => a.id === assignment.id);
+      if (!assignmentBelongsToCollege) {
+        return res.status(404).json({ message: "Assignment not found" });
+      }
+      
+      // Return only basic info for students (no grading criteria)
+      res.json({
+        id: assignment.id,
+        title: assignment.title,
+        description: assignment.description,
+        maxPoints: assignment.maxPoints,
+        dueDate: assignment.dueDate,
+      });
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch assignment" });
+    }
+  });
+
   // Student submission (public - no auth required)
   app.post("/api/public/:collegeCode/assignments/:assignmentId/submit", upload.single("file"), async (req, res) => {
     try {

@@ -11,8 +11,10 @@ import Assignments from "@/pages/assignments";
 import Submissions from "@/pages/submissions";
 import UploadPage from "@/pages/upload";
 import GradingResults from "@/pages/grading-results";
+import Settings from "@/pages/settings";
 import Login from "@/pages/login";
 import StudentPortal from "@/pages/student-portal";
+import StudentAssignmentPortal from "@/pages/student-assignment-portal";
 import NotFound from "@/pages/not-found";
 
 function AuthenticatedRouter() {
@@ -28,6 +30,7 @@ function AuthenticatedRouter() {
             <Route path="/submissions" component={Submissions} />
             <Route path="/upload" component={UploadPage} />
             <Route path="/grading-results" component={GradingResults} />
+            <Route path="/settings" component={Settings} />
             <Route component={NotFound} />
           </Switch>
         </main>
@@ -81,6 +84,7 @@ function App() {
       <TooltipProvider>
         <Toaster />
         <Switch>
+          <Route path="/student/:collegeCode/:assignmentId" component={StudentAssignmentPortal} />
           <Route path="/student/:collegeCode" component={StudentPortal} />
           <Route>
             <AppContent />
