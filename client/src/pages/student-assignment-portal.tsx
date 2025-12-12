@@ -94,8 +94,11 @@ export default function StudentAssignmentPortal() {
       "application/msword": [".doc"],
       "application/vnd.openxmlformats-officedocument.wordprocessingml.document": [".docx"],
       "application/vnd.openxmlformats-officedocument.presentationml.presentation": [".pptx"],
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": [".xlsx"],
+      "application/vnd.ms-excel": [".xls"],
       "text/plain": [".txt"],
       "text/markdown": [".md"],
+      "text/csv": [".csv"],
       "image/png": [".png"],
       "image/jpeg": [".jpg", ".jpeg"],
       "image/gif": [".gif"],
@@ -285,7 +288,7 @@ export default function StudentAssignmentPortal() {
                       <p className="text-gray-600">
                         {isDragActive ? "Drop your file here" : "Drag and drop your file here, or click to browse"}
                       </p>
-                      <p className="text-sm text-gray-400 mt-1">Supported: PDF, DOC, DOCX, PPTX, TXT, MD, PNG, JPG, GIF (max 10MB)</p>
+                      <p className="text-sm text-gray-400 mt-1">Supported: PDF, DOC, DOCX, PPTX, XLSX, XLS, CSV, TXT, MD, PNG, JPG, GIF (max 10MB)</p>
                     </div>
                   )}
                 </div>
