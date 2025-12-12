@@ -7,6 +7,7 @@ import { storage } from "./storage";
 import { insertAssignmentSchema, insertSubmissionSchema, loginSchema, colleges } from "@shared/schema";
 import { gradeAssignment } from "./services/openai";
 import { processUploadedFile, validateFileUpload } from "./services/fileProcessor";
+import { checkPlagiarism, getPlagiarismResult } from "./services/plagiarismService";
 import { db } from "./db";
 import { users } from "@shared/schema";
 import { eq } from "drizzle-orm";
@@ -536,6 +537,74 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(result);
     } catch (error) {
       res.status(500).json({ message: "Failed to fetch grading result" });
+    }
+  });
+
+  // Plagiarism check routes
+  app.post("/api/submissions/:id/plagiarism-check", requireAuth, async (req, res) => {
+    try {
+      const submission = await storage.getSubmission(req.params.id);
+      if (!submission) {
+        return res.status(404).json({ message: "Submission not found" });
+      }
+
+      const result = await checkPlagiarism(req.params.id);
+      if (!result) {
+        return res.status(500).json({ message: "Failed to perform plagiarism check" });
+      }
+
+      res.json(result);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to check plagiarism", error: (error as Error).message });
+    }
+  });
+
+  app.get("/api/submissions/:id/plagiarism", requireAuth, async (req, res) => {
+    try {
+      const result = await getPlagiarismResult(req.params.id);
+      if (!result) {
+        return res.status(404).json({ message: "Plagiarism result not found" });
+      }
+      res.json(result);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch plagiarism result" });
+    }
+  });
+
+  app.post("/api/assignments/:id/check-all-plagiarism", requireAuth, async (req, res) => {
+    try {
+      const assignment = await storage.getAssignment(req.params.id);
+      if (!assignment) {
+        return res.status(404).json({ message: "Assignment not found" });
+      }
+
+      const submissions = await storage.getSubmissions(req.params.id);
+      const results = [];
+      const errors = [];
+
+      for (const submission of submissions) {
+        try {
+          const result = await checkPlagiarism(submission.id);
+          if (result) {
+            results.push(result);
+          }
+        } catch (error) {
+          errors.push({
+            submissionId: submission.id,
+            studentName: submission.studentName,
+            error: (error as Error).message
+          });
+        }
+      }
+
+      res.json({
+        checked: results.length,
+        errorCount: errors.length,
+        results,
+        errors
+      });
+    } catch (error) {
+      res.status(500).json({ message: "Failed to check plagiarism", error: (error as Error).message });
     }
   });
 
