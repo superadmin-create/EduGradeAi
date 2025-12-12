@@ -45,6 +45,28 @@ Each college has a dedicated student portal for assignment submissions.
 - Links can be copied directly from the Settings page
 - Links update automatically when new assignments are created
 
+## Plagiarism Detection
+
+The application includes AI-powered plagiarism detection to check submissions for:
+1. **AI-Generated Content**: Detects if a submission was likely written by AI
+2. **Similarity with Other Submissions**: Compares submissions to find copied content
+
+### How to Use
+- Navigate to the Submissions page
+- Click "Check Plagiarism" button on any submission card
+- Results show AI detection status and similarity with other submissions
+
+### Plagiarism Results
+- **AI Detection**: Shows if content is "AI Generated" or "Human Written" with confidence percentage
+- **Similarity Score**: Percentage of content matching other submissions
+- **Similar Submissions**: Lists matching submissions with student name, ID, and similarity percentage
+- **Matched Phrases**: Shows specific phrases that matched between submissions
+
+### API Endpoints
+- `POST /api/submissions/:id/plagiarism-check` - Run plagiarism check on a submission
+- `GET /api/submissions/:id/plagiarism` - Get existing plagiarism result
+- `POST /api/assignments/:id/check-all-plagiarism` - Check all submissions for an assignment
+
 ## Export Functionality
 
 The admin dashboard (Submissions page) includes export features:
