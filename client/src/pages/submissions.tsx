@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
-import { Search, FileText, User, Calendar, CheckCircle, Clock, Download, FileSpreadsheet, Trash2 } from "lucide-react";
+import { Search, FileText, User, Calendar, CheckCircle, Clock, Download, FileSpreadsheet, Trash2, Shield, AlertTriangle, Bot, Users } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -39,6 +39,9 @@ export default function Submissions() {
   const [appliedDateFilter, setAppliedDateFilter] = useState<Date | undefined>(undefined);
   const [isExporting, setIsExporting] = useState(false);
 
+  const [checkingPlagiarism, setCheckingPlagiarism] = useState<string | null>(null);
+  const [plagiarismResults, setPlagiarismResults] = useState<Record<string, any>>({});
+
   const deleteSubmissionMutation = useMutation({
     mutationFn: async (id: string) => {
       await apiRequest("DELETE", `/api/submissions/${id}`);
@@ -59,6 +62,41 @@ export default function Submissions() {
       });
     },
   });
+
+  const checkPlagiarism = async (submissionId: string) => {
+    setCheckingPlagiarism(submissionId);
+    try {
+      const response = await apiRequest("POST", `/api/submissions/${submissionId}/plagiarism-check`);
+      const result = await response.json();
+      setPlagiarismResults(prev => ({ ...prev, [submissionId]: result }));
+      toast({
+        title: "Plagiarism Check Complete",
+        description: `AI Detection: ${result.isAiGenerated ? "AI Generated" : "Human Written"}, Similarity: ${result.overallSimilarityScore}%`,
+      });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Failed to check plagiarism",
+        variant: "destructive",
+      });
+    } finally {
+      setCheckingPlagiarism(null);
+    }
+  };
+
+  const fetchPlagiarismResult = async (submissionId: string) => {
+    try {
+      const response = await fetch(`/api/submissions/${submissionId}/plagiarism`, {
+        credentials: "include",
+      });
+      if (response.ok) {
+        const result = await response.json();
+        setPlagiarismResults(prev => ({ ...prev, [submissionId]: result }));
+      }
+    } catch (error) {
+      // Result not found is expected for unchecked submissions
+    }
+  };
 
   interface Assignment {
     id: string;
@@ -471,6 +509,20 @@ export default function Submissions() {
                     <Button 
                       variant="outline" 
                       size="sm" 
+                      onClick={() => checkPlagiarism(submission.id)}
+                      disabled={checkingPlagiarism === submission.id}
+                      data-testid={`button-plagiarism-check-${submission.id}`}
+                    >
+                      {checkingPlagiarism === submission.id ? (
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-current mr-2" />
+                      ) : (
+                        <Shield className="h-4 w-4 mr-2" />
+                      )}
+                      {plagiarismResults[submission.id] ? "Recheck" : "Check Plagiarism"}
+                    </Button>
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
                       onClick={() => setLocation(`/grading-results?submissionId=${submission.id}`)}
                       data-testid={`button-view-submission-${submission.id}`}
                     >
@@ -509,7 +561,7 @@ export default function Submissions() {
                 </div>
               </CardHeader>
               <CardContent>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
                   <div className="flex items-center text-sm text-muted-foreground">
                     <User className="mr-2 w-4 h-4" />
                     <span>Student ID: {submission.studentId}</span>
@@ -525,6 +577,88 @@ export default function Submissions() {
                     <span>Submitted {new Date(submission.submittedAt).toLocaleDateString()}</span>
                   </div>
                 </div>
+
+                {plagiarismResults[submission.id] && (
+                  <div className="mt-4 p-4 bg-muted/50 rounded-lg space-y-3" data-testid={`plagiarism-result-${submission.id}`}>
+                    <div className="flex items-center justify-between">
+                      <h4 className="font-semibold flex items-center gap-2">
+                        <Shield className="h-4 w-4" />
+                        Plagiarism Check Results
+                      </h4>
+                    </div>
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="flex items-center gap-2">
+                        <Bot className="h-4 w-4" />
+                        <span className="text-sm font-medium">AI Detection:</span>
+                        {plagiarismResults[submission.id].isAiGenerated ? (
+                          <Badge variant="destructive" className="flex items-center gap-1">
+                            <AlertTriangle className="h-3 w-3" />
+                            AI Generated ({plagiarismResults[submission.id].aiConfidence}% confidence)
+                          </Badge>
+                        ) : (
+                          <Badge variant="outline" className="text-green-600 border-green-600">
+                            Human Written ({100 - (plagiarismResults[submission.id].aiConfidence || 0)}% confidence)
+                          </Badge>
+                        )}
+                      </div>
+                      
+                      <div className="flex items-center gap-2">
+                        <Users className="h-4 w-4" />
+                        <span className="text-sm font-medium">Similarity Score:</span>
+                        <Badge 
+                          variant={plagiarismResults[submission.id].overallSimilarityScore > 50 ? "destructive" : 
+                                   plagiarismResults[submission.id].overallSimilarityScore > 20 ? "secondary" : "outline"}
+                          className={plagiarismResults[submission.id].overallSimilarityScore <= 20 ? "text-green-600 border-green-600" : ""}
+                        >
+                          {plagiarismResults[submission.id].overallSimilarityScore}%
+                        </Badge>
+                      </div>
+                    </div>
+
+                    {plagiarismResults[submission.id].aiExplanation && (
+                      <div className="text-sm text-muted-foreground">
+                        <span className="font-medium">AI Analysis:</span> {plagiarismResults[submission.id].aiExplanation}
+                      </div>
+                    )}
+
+                    {plagiarismResults[submission.id].similarSubmissions?.length > 0 && (
+                      <div className="mt-3">
+                        <h5 className="text-sm font-semibold mb-2 flex items-center gap-2">
+                          <AlertTriangle className="h-4 w-4 text-yellow-500" />
+                          Similar Submissions Found:
+                        </h5>
+                        <div className="space-y-2">
+                          {plagiarismResults[submission.id].similarSubmissions.map((similar: any, index: number) => (
+                            <div 
+                              key={index} 
+                              className="p-2 bg-background rounded border text-sm"
+                              data-testid={`similar-submission-${submission.id}-${index}`}
+                            >
+                              <div className="flex items-center justify-between">
+                                <div>
+                                  <span className="font-medium">{similar.studentName}</span>
+                                  <span className="text-muted-foreground ml-2">(ID: {similar.studentId})</span>
+                                </div>
+                                <Badge variant={similar.similarityPercentage > 50 ? "destructive" : "secondary"}>
+                                  {similar.similarityPercentage}% match
+                                </Badge>
+                              </div>
+                              {similar.matchedPhrases?.length > 0 && (
+                                <div className="mt-1 text-xs text-muted-foreground">
+                                  <span className="font-medium">Matched phrases: </span>
+                                  {similar.matchedPhrases.slice(0, 2).map((phrase: string, i: number) => (
+                                    <span key={i} className="italic">"{phrase.substring(0, 50)}..." </span>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
               </CardContent>
             </Card>
           ))}
