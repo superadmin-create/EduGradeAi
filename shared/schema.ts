@@ -66,6 +66,23 @@ export const gradingResults = pgTable("grading_results", {
   gradedAt: timestamp("graded_at").default(sql`now()`).notNull(),
 });
 
+export const plagiarismResults = pgTable("plagiarism_results", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  submissionId: varchar("submission_id").notNull().references(() => submissions.id),
+  isAiGenerated: boolean("is_ai_generated").notNull(),
+  aiConfidence: integer("ai_confidence").notNull(),
+  aiExplanation: text("ai_explanation"),
+  similarSubmissions: jsonb("similar_submissions").$type<{
+    submissionId: string;
+    studentName: string;
+    studentId: string;
+    similarityPercentage: number;
+    matchedPhrases: string[];
+  }[]>(),
+  overallSimilarityScore: integer("overall_similarity_score").notNull().default(0),
+  checkedAt: timestamp("checked_at").default(sql`now()`).notNull(),
+});
+
 export const insertAssignmentSchema = createInsertSchema(assignments).omit({
   id: true,
   createdAt: true,
@@ -91,6 +108,11 @@ export const insertCollegeSchema = createInsertSchema(colleges).omit({
   usedQuota: true,
 });
 
+export const insertPlagiarismResultSchema = createInsertSchema(plagiarismResults).omit({
+  id: true,
+  checkedAt: true,
+});
+
 export const insertUserSchema = createInsertSchema(users).omit({
   id: true,
 });
@@ -106,10 +128,12 @@ export type User = typeof users.$inferSelect;
 export type Assignment = typeof assignments.$inferSelect;
 export type Submission = typeof submissions.$inferSelect;
 export type GradingResult = typeof gradingResults.$inferSelect;
+export type PlagiarismResult = typeof plagiarismResults.$inferSelect;
 
 export type InsertCollege = z.infer<typeof insertCollegeSchema>;
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type InsertAssignment = z.infer<typeof insertAssignmentSchema>;
 export type InsertSubmission = z.infer<typeof insertSubmissionSchema>;
 export type InsertGradingResult = z.infer<typeof insertGradingResultSchema>;
+export type InsertPlagiarismResult = z.infer<typeof insertPlagiarismResultSchema>;
 export type LoginData = z.infer<typeof loginSchema>;

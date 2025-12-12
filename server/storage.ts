@@ -1,4 +1,4 @@
-import { type User, type InsertUser, type Assignment, type InsertAssignment, type Submission, type InsertSubmission, type GradingResult, type InsertGradingResult, type College, type InsertCollege, users, assignments, submissions, gradingResults, colleges } from "@shared/schema";
+import { type User, type InsertUser, type Assignment, type InsertAssignment, type Submission, type InsertSubmission, type GradingResult, type InsertGradingResult, type College, type InsertCollege, type PlagiarismResult, type InsertPlagiarismResult, users, assignments, submissions, gradingResults, colleges, plagiarismResults } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, sql, or, like } from "drizzle-orm";
 
@@ -51,6 +51,11 @@ export interface IStorage {
     quotaUsed: number;
     quotaTotal: number | null | undefined;
   }>;
+
+  getPlagiarismResult(submissionId: string): Promise<PlagiarismResult | undefined>;
+  createPlagiarismResult(result: InsertPlagiarismResult): Promise<PlagiarismResult>;
+  deletePlagiarismResult(submissionId: string): Promise<boolean>;
+  getSubmissionsForPlagiarismCheck(assignmentId: string, excludeSubmissionId: string): Promise<Submission[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -355,6 +360,36 @@ export class DatabaseStorage implements IStorage {
       quotaUsed: college.usedQuota,
       quotaTotal: college.quota ?? null,
     };
+  }
+
+  async getPlagiarismResult(submissionId: string): Promise<PlagiarismResult | undefined> {
+    const [result] = await db.select().from(plagiarismResults).where(eq(plagiarismResults.submissionId, submissionId));
+    return result;
+  }
+
+  async createPlagiarismResult(insertResult: InsertPlagiarismResult): Promise<PlagiarismResult> {
+    // Delete existing result if any
+    await db.delete(plagiarismResults).where(eq(plagiarismResults.submissionId, insertResult.submissionId));
+    
+    const [result] = await db.insert(plagiarismResults).values({
+      submissionId: insertResult.submissionId,
+      isAiGenerated: insertResult.isAiGenerated,
+      aiConfidence: insertResult.aiConfidence,
+      aiExplanation: insertResult.aiExplanation,
+      similarSubmissions: insertResult.similarSubmissions,
+      overallSimilarityScore: insertResult.overallSimilarityScore ?? 0,
+    }).returning();
+    return result;
+  }
+
+  async deletePlagiarismResult(submissionId: string): Promise<boolean> {
+    await db.delete(plagiarismResults).where(eq(plagiarismResults.submissionId, submissionId));
+    return true;
+  }
+
+  async getSubmissionsForPlagiarismCheck(assignmentId: string, excludeSubmissionId: string): Promise<Submission[]> {
+    const allSubmissions = await this.getSubmissions(assignmentId);
+    return allSubmissions.filter(s => s.id !== excludeSubmissionId && s.content && s.content.trim().length > 0);
   }
 }
 
