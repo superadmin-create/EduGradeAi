@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
+import AssignmentDialog from "@/components/assignments/assignment-dialog";
 
 interface Assignment {
   id: string;
@@ -22,6 +23,9 @@ interface Assignment {
 export default function Assignments() {
   const [, setLocation] = useLocation();
   const [searchQuery, setSearchQuery] = useState("");
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [dialogMode, setDialogMode] = useState<"create" | "edit">("create");
+  const [selectedAssignment, setSelectedAssignment] = useState<Assignment | null>(null);
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -85,6 +89,18 @@ export default function Assignments() {
     }
   };
 
+  const handleCreateAssignment = () => {
+    setDialogMode("create");
+    setSelectedAssignment(null);
+    setDialogOpen(true);
+  };
+
+  const handleEditAssignment = (assignment: Assignment) => {
+    setDialogMode("edit");
+    setSelectedAssignment(assignment);
+    setDialogOpen(true);
+  };
+
   if (isLoading) {
     return (
       <div className="space-y-6">
@@ -127,7 +143,7 @@ export default function Assignments() {
             />
           </div>
         </div>
-        <Button data-testid="button-create-assignment">
+        <Button onClick={handleCreateAssignment} data-testid="button-create-assignment">
           <Plus className="mr-2 h-4 w-4" />
           Create Assignment
         </Button>
@@ -141,7 +157,7 @@ export default function Assignments() {
             <p className="text-muted-foreground text-center mb-4">
               {searchQuery ? "Try adjusting your search query" : "Get started by creating your first assignment"}
             </p>
-            <Button data-testid="button-create-first-assignment">
+            <Button onClick={handleCreateAssignment} data-testid="button-create-first-assignment">
               <Plus className="mr-2 h-4 w-4" />
               Create Assignment
             </Button>
@@ -165,7 +181,7 @@ export default function Assignments() {
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
-                      <DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => handleEditAssignment(assignment)} data-testid={`button-edit-assignment-${assignment.id}`}>
                         <Edit className="mr-2 h-4 w-4" />
                         Edit
                       </DropdownMenuItem>
@@ -222,6 +238,13 @@ export default function Assignments() {
           ))}
         </div>
       )}
+
+      <AssignmentDialog
+        open={dialogOpen}
+        onOpenChange={setDialogOpen}
+        assignment={selectedAssignment}
+        mode={dialogMode}
+      />
     </div>
   );
 }
