@@ -34,10 +34,11 @@ Each college has a dedicated student portal for assignment submissions.
 ### Student Portal Features
 - View list of assignments for their college (general portal)
 - Direct link to specific assignment submission (assignment-specific portal)
-- Enter student name and student ID
-- Upload submission files (PDF, DOC, DOCX, PPTX, TXT, MD, PNG, JPG, GIF supported)
+- Enter student name, student ID, and email address
+- Upload submission files (PDF, DOC, DOCX, PPTX, XLSX, XLS, CSV, TXT, MD, PNG, JPG, GIF supported)
 - Automatic AI grading upon submission (if college has available quota)
 - Receive confirmation upon successful submission
+- Email confirmation sent to student upon submission (via Gmail integration)
 
 ### Admin Settings - Portal Links
 - Navigate to Settings page in admin dashboard to view all student portal links
@@ -150,3 +151,9 @@ Preferred communication style: Simple, everyday language.
 - **React Dropzone**: Drag-and-drop file upload interface
 - **Multer**: Express middleware for handling multipart/form-data
 - **Document Processing**: Built-in text extraction for common file formats
+
+### Email Integration
+- **Gmail API**: Connected via Replit connector for sending confirmation emails
+- **Email Service**: Located at `server/services/emailService.ts`
+- **Features**: Sends HTML-formatted confirmation emails to students upon submission
+- **Auto-triggered**: Emails are sent automatically when a student provides their email address during submission
