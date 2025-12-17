@@ -38,6 +38,7 @@ export const submissions = pgTable("submissions", {
   assignmentId: varchar("assignment_id").notNull().references(() => assignments.id),
   studentName: text("student_name").notNull(),
   studentId: text("student_id").notNull(),
+  studentEmail: text("student_email"),
   content: text("content").notNull(),
   fileName: text("file_name"),
   fileMimeType: text("file_mime_type"),

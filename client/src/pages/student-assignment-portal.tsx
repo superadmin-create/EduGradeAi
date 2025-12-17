@@ -32,6 +32,7 @@ export default function StudentAssignmentPortal() {
   
   const [studentName, setStudentName] = useState("");
   const [studentId, setStudentId] = useState("");
+  const [studentEmail, setStudentEmail] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [isSubmitted, setIsSubmitted] = useState(false);
 
@@ -110,7 +111,7 @@ export default function StudentAssignmentPortal() {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!studentName || !studentId || !file) {
+    if (!studentName || !studentId || !studentEmail || !file) {
       toast({
         title: "Missing Information",
         description: "Please fill in all fields and upload a file.",
@@ -122,6 +123,7 @@ export default function StudentAssignmentPortal() {
     const formData = new FormData();
     formData.append("studentName", studentName);
     formData.append("studentId", studentId);
+    formData.append("studentEmail", studentEmail);
     formData.append("file", file);
 
     submitMutation.mutate(formData);
@@ -130,6 +132,7 @@ export default function StudentAssignmentPortal() {
   const resetForm = () => {
     setStudentName("");
     setStudentId("");
+    setStudentEmail("");
     setFile(null);
     setIsSubmitted(false);
   };
@@ -265,6 +268,20 @@ export default function StudentAssignmentPortal() {
               </div>
 
               <div className="space-y-2">
+                <Label htmlFor="studentEmail">Email Address</Label>
+                <Input
+                  id="studentEmail"
+                  type="email"
+                  placeholder="Enter your email address"
+                  value={studentEmail}
+                  onChange={(e) => setStudentEmail(e.target.value)}
+                  required
+                  data-testid="input-student-email"
+                />
+                <p className="text-xs text-gray-500">You will receive a confirmation email at this address.</p>
+              </div>
+
+              <div className="space-y-2">
                 <Label>Upload Your Submission</Label>
                 <div
                   {...getRootProps()}
@@ -297,7 +314,7 @@ export default function StudentAssignmentPortal() {
               <Button 
                 type="submit" 
                 className="w-full" 
-                disabled={submitMutation.isPending || !studentName || !studentId || !file}
+                disabled={submitMutation.isPending || !studentName || !studentId || !studentEmail || !file}
                 data-testid="button-submit"
               >
                 {submitMutation.isPending ? (

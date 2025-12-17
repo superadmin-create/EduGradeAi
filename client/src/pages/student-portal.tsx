@@ -32,6 +32,7 @@ export default function StudentPortal() {
   const [selectedAssignment, setSelectedAssignment] = useState<string>("");
   const [studentName, setStudentName] = useState("");
   const [studentId, setStudentId] = useState("");
+  const [studentEmail, setStudentEmail] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [isSubmitted, setIsSubmitted] = useState(false);
 
@@ -110,7 +111,7 @@ export default function StudentPortal() {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!selectedAssignment || !studentName || !studentId || !file) {
+    if (!selectedAssignment || !studentName || !studentId || !studentEmail || !file) {
       toast({
         title: "Missing Information",
         description: "Please fill in all fields and upload a file.",
@@ -122,6 +123,7 @@ export default function StudentPortal() {
     const formData = new FormData();
     formData.append("studentName", studentName);
     formData.append("studentId", studentId);
+    formData.append("studentEmail", studentEmail);
     formData.append("file", file);
 
     submitMutation.mutate(formData);
@@ -131,6 +133,7 @@ export default function StudentPortal() {
     setSelectedAssignment("");
     setStudentName("");
     setStudentId("");
+    setStudentEmail("");
     setFile(null);
     setIsSubmitted(false);
   };
@@ -226,6 +229,20 @@ export default function StudentPortal() {
               </div>
 
               <div className="space-y-2">
+                <Label htmlFor="studentEmail">Email Address</Label>
+                <Input
+                  id="studentEmail"
+                  type="email"
+                  placeholder="Enter your email address"
+                  value={studentEmail}
+                  onChange={(e) => setStudentEmail(e.target.value)}
+                  required
+                  data-testid="input-student-email"
+                />
+                <p className="text-xs text-gray-500">You will receive a confirmation email at this address.</p>
+              </div>
+
+              <div className="space-y-2">
                 <Label htmlFor="assignment">Select Assignment</Label>
                 <Select value={selectedAssignment} onValueChange={setSelectedAssignment}>
                   <SelectTrigger data-testid="select-assignment">
@@ -280,7 +297,7 @@ export default function StudentPortal() {
               <Button 
                 type="submit" 
                 className="w-full" 
-                disabled={submitMutation.isPending || !selectedAssignment || !studentName || !studentId || !file}
+                disabled={submitMutation.isPending || !selectedAssignment || !studentName || !studentId || !studentEmail || !file}
                 data-testid="button-submit"
               >
                 {submitMutation.isPending ? (

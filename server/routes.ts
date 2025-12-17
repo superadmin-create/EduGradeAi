@@ -719,8 +719,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Assignment not found" });
       }
 
-      // Validate student name and ID
-      const { studentName, studentId } = req.body;
+      // Validate student name, ID, and email
+      const { studentName, studentId, studentEmail } = req.body;
       if (!studentName || !studentId) {
         return res.status(400).json({ message: "Student name and ID are required" });
       }
@@ -772,6 +772,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         assignmentId: assignment.id,
         studentName,
         studentId,
+        studentEmail: studentEmail || null,
         content,
         fileName,
         rawFileData,
