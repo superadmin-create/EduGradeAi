@@ -8,6 +8,7 @@ import { insertAssignmentSchema, insertSubmissionSchema, loginSchema, colleges }
 import { gradeAssignment } from "./services/openai";
 import { processUploadedFile, validateFileUpload } from "./services/fileProcessor";
 import { checkPlagiarism, getPlagiarismResult } from "./services/plagiarismService";
+import { sendSubmissionConfirmationEmail } from "./services/emailService";
 import { db } from "./db";
 import { users } from "@shared/schema";
 import { eq } from "drizzle-orm";
@@ -782,6 +783,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Flag for Vision processing if needed
       if (needsVisionProcessing) {
         await storage.updateSubmission(submission.id, { needsVisionProcessing: true });
+      }
+
+      // Send confirmation email if student provided email
+      if (studentEmail) {
+        sendSubmissionConfirmationEmail(
+          studentEmail,
+          studentName,
+          assignment.title,
+          college.name,
+          submission.submittedAt
+        ).catch(err => console.error('Failed to send confirmation email:', err));
       }
 
       // Respond to student immediately
