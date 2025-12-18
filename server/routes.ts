@@ -727,14 +727,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { email, assignmentId } = parsed.data;
       const normalizedEmail = email.toLowerCase().trim();
 
-      // Rate limiting: max 3 requests per email per 15 minutes
-      const recentRequests = await storage.getRecentOtpRequestsByEmail(normalizedEmail, college.id, 15);
-      if (recentRequests.length >= 3) {
-        return res.status(429).json({ 
-          message: "Too many verification requests. Please wait a few minutes before trying again." 
-        });
-      }
-
       // Generate 6-digit OTP
       const otp = crypto.randomInt(100000, 999999).toString();
       
