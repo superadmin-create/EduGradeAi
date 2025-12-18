@@ -4,37 +4,64 @@ import { google } from 'googleapis';
 let connectionSettings: any;
 
 async function getAccessToken() {
-  if (connectionSettings && connectionSettings.settings.expires_at && new Date(connectionSettings.settings.expires_at).getTime() > Date.now()) {
+  if (connectionSettings && connectionSettings.settings?.expires_at && new Date(connectionSettings.settings.expires_at).getTime() > Date.now()) {
+    console.log('Using cached Gmail access token');
     return connectionSettings.settings.access_token;
   }
   
   const hostname = process.env.REPLIT_CONNECTORS_HOSTNAME;
+  console.log('REPLIT_CONNECTORS_HOSTNAME:', hostname ? 'present' : 'missing');
+  
   const xReplitToken = process.env.REPL_IDENTITY 
     ? 'repl ' + process.env.REPL_IDENTITY 
     : process.env.WEB_REPL_RENEWAL 
     ? 'depl ' + process.env.WEB_REPL_RENEWAL 
     : null;
 
+  console.log('Token type:', process.env.REPL_IDENTITY ? 'REPL_IDENTITY' : process.env.WEB_REPL_RENEWAL ? 'WEB_REPL_RENEWAL' : 'none');
+
   if (!xReplitToken) {
+    console.error('No X_REPLIT_TOKEN found - Gmail emails cannot be sent');
     throw new Error('X_REPLIT_TOKEN not found for repl/depl');
   }
 
-  connectionSettings = await fetch(
-    'https://' + hostname + '/api/v2/connection?include_secrets=true&connector_names=google-mail',
-    {
-      headers: {
-        'Accept': 'application/json',
-        'X_REPLIT_TOKEN': xReplitToken
-      }
-    }
-  ).then(res => res.json()).then(data => data.items?.[0]);
-
-  const accessToken = connectionSettings?.settings?.access_token || connectionSettings.settings?.oauth?.credentials?.access_token;
-
-  if (!connectionSettings || !accessToken) {
-    throw new Error('Gmail not connected');
+  if (!hostname) {
+    console.error('REPLIT_CONNECTORS_HOSTNAME not set');
+    throw new Error('Gmail connector hostname not configured');
   }
-  return accessToken;
+
+  try {
+    const response = await fetch(
+      'https://' + hostname + '/api/v2/connection?include_secrets=true&connector_names=google-mail',
+      {
+        headers: {
+          'Accept': 'application/json',
+          'X_REPLIT_TOKEN': xReplitToken
+        }
+      }
+    );
+    
+    const data = await response.json();
+    connectionSettings = data.items?.[0];
+    
+    if (!connectionSettings) {
+      console.error('No Gmail connection found in connector response');
+      throw new Error('Gmail not connected - please set up Gmail integration');
+    }
+
+    const accessToken = connectionSettings?.settings?.access_token || connectionSettings?.settings?.oauth?.credentials?.access_token;
+
+    if (!accessToken) {
+      console.error('No access token in Gmail connection settings');
+      throw new Error('Gmail access token not available');
+    }
+    
+    console.log('Gmail access token obtained successfully');
+    return accessToken;
+  } catch (error) {
+    console.error('Error fetching Gmail connection:', error);
+    throw error;
+  }
 }
 
 async function getGmailClient() {
@@ -158,7 +185,9 @@ export async function sendOtpEmail(
   collegeName: string
 ): Promise<boolean> {
   try {
+    console.log(`Attempting to send OTP to ${studentEmail}...`);
     const gmail = await getGmailClient();
+    console.log('Gmail client obtained successfully');
 
     const subject = `Your Verification Code - ${collegeName}`;
     
