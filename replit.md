@@ -34,11 +34,30 @@ Each college has a dedicated student portal for assignment submissions.
 ### Student Portal Features
 - View list of assignments for their college (general portal)
 - Direct link to specific assignment submission (assignment-specific portal)
-- Enter student name, student ID, and email address
+- **Email verification via OTP** before submission (required)
+- Enter student name, student ID after email is verified
 - Upload submission files (PDF, DOC, DOCX, PPTX, XLSX, XLS, CSV, TXT, MD, PNG, JPG, GIF supported)
 - Automatic AI grading upon submission (if college has available quota)
 - Receive confirmation upon successful submission
 - Email confirmation sent to student upon submission (via Gmail integration)
+
+### Email OTP Verification
+Students must verify their email address before submitting assignments:
+1. **Step 1**: Enter email address and click "Send Verification Code"
+2. **Step 2**: Check email for 6-digit verification code, enter it in the portal
+3. **Step 3**: Once verified, fill in student details and upload submission
+
+#### OTP Security Features
+- **6-digit codes**: Randomly generated secure codes
+- **10-minute expiry**: Codes expire after 10 minutes
+- **Rate limiting**: Max 3 OTP requests per email per 15 minutes
+- **Attempt limiting**: Max 5 verification attempts per code
+- **Secure hashing**: OTP codes are hashed (SHA-256) before storage
+- **Verified email binding**: Submissions use the verified email, not user input
+
+#### OTP API Endpoints
+- `POST /api/public/:collegeCode/otp/request` - Request OTP (body: `{ email, assignmentId? }`)
+- `POST /api/public/:collegeCode/otp/verify` - Verify OTP (body: `{ requestId, otp }`)
 
 ### Admin Settings - Portal Links
 - Navigate to Settings page in admin dashboard to view all student portal links
