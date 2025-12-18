@@ -3,10 +3,15 @@ import { google } from 'googleapis';
 
 let connectionSettings: any;
 
-async function getAccessToken() {
-  if (connectionSettings && connectionSettings.settings?.expires_at && new Date(connectionSettings.settings.expires_at).getTime() > Date.now()) {
+async function getAccessToken(forceRefresh = false) {
+  if (!forceRefresh && connectionSettings && connectionSettings.settings?.expires_at && new Date(connectionSettings.settings.expires_at).getTime() > Date.now()) {
     console.log('Using cached Gmail access token');
     return connectionSettings.settings.access_token;
+  }
+  
+  if (forceRefresh) {
+    console.log('Forcing Gmail token refresh...');
+    connectionSettings = null;
   }
   
   const hostname = process.env.REPLIT_CONNECTORS_HOSTNAME;
@@ -64,8 +69,8 @@ async function getAccessToken() {
   }
 }
 
-async function getGmailClient() {
-  const accessToken = await getAccessToken();
+async function getGmailClient(forceRefresh = false) {
+  const accessToken = await getAccessToken(forceRefresh);
 
   const oauth2Client = new google.auth.OAuth2();
   oauth2Client.setCredentials({
@@ -184,14 +189,9 @@ export async function sendOtpEmail(
   otp: string,
   collegeName: string
 ): Promise<boolean> {
-  try {
-    console.log(`Attempting to send OTP to ${studentEmail}...`);
-    const gmail = await getGmailClient();
-    console.log('Gmail client obtained successfully');
-
-    const subject = `Your Verification Code - ${collegeName}`;
-    
-    const body = `
+  const subject = `Your Verification Code - ${collegeName}`;
+  
+  const body = `
 <!DOCTYPE html>
 <html>
 <head>
@@ -229,7 +229,12 @@ export async function sendOtpEmail(
 </html>
 `;
 
-    const encodedMessage = createEmailMessage(studentEmail, subject, body);
+  const encodedMessage = createEmailMessage(studentEmail, subject, body);
+
+  async function trySendEmail(forceRefresh: boolean): Promise<void> {
+    console.log(`Attempting to send OTP to ${studentEmail}... (forceRefresh: ${forceRefresh})`);
+    const gmail = await getGmailClient(forceRefresh);
+    console.log('Gmail client obtained successfully');
     
     await gmail.users.messages.send({
       userId: 'me',
@@ -237,10 +242,24 @@ export async function sendOtpEmail(
         raw: encodedMessage
       }
     });
+  }
 
+  try {
+    await trySendEmail(false);
     console.log(`OTP email sent to ${studentEmail}`);
     return true;
-  } catch (error) {
+  } catch (error: any) {
+    if (error?.status === 401 || error?.code === 401) {
+      console.log('Got 401 error, retrying with token refresh...');
+      try {
+        await trySendEmail(true);
+        console.log(`OTP email sent to ${studentEmail} (after token refresh)`);
+        return true;
+      } catch (retryError) {
+        console.error('Failed to send OTP email after token refresh:', retryError);
+        return false;
+      }
+    }
     console.error('Failed to send OTP email:', error);
     return false;
   }
