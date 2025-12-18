@@ -84,6 +84,18 @@ export const plagiarismResults = pgTable("plagiarism_results", {
   checkedAt: timestamp("checked_at").default(sql`now()`).notNull(),
 });
 
+export const otpRequests = pgTable("otp_requests", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  email: text("email").notNull(),
+  collegeId: varchar("college_id").notNull(),
+  assignmentId: varchar("assignment_id"),
+  otpHash: text("otp_hash").notNull(),
+  expiresAt: timestamp("expires_at").notNull(),
+  attempts: integer("attempts").notNull().default(0),
+  status: text("status").notNull().default("pending"), // pending, verified, expired
+  createdAt: timestamp("created_at").default(sql`now()`).notNull(),
+});
+
 export const insertAssignmentSchema = createInsertSchema(assignments).omit({
   id: true,
   createdAt: true,
@@ -114,6 +126,13 @@ export const insertPlagiarismResultSchema = createInsertSchema(plagiarismResults
   checkedAt: true,
 });
 
+export const insertOtpRequestSchema = createInsertSchema(otpRequests).omit({
+  id: true,
+  createdAt: true,
+  attempts: true,
+  status: true,
+});
+
 export const insertUserSchema = createInsertSchema(users).omit({
   id: true,
 });
@@ -124,12 +143,26 @@ export const loginSchema = z.object({
   password: z.string().min(1, "Password is required"),
 });
 
+export const otpRequestSchema = z.object({
+  email: z.string().email("Valid email is required"),
+  assignmentId: z.string().optional(),
+});
+
+export const otpVerifySchema = z.object({
+  requestId: z.string().min(1, "Request ID is required"),
+  otp: z.string().length(6, "OTP must be 6 digits"),
+});
+
+export type OtpRequestData = z.infer<typeof otpRequestSchema>;
+export type OtpVerifyData = z.infer<typeof otpVerifySchema>;
+
 export type College = typeof colleges.$inferSelect;
 export type User = typeof users.$inferSelect;
 export type Assignment = typeof assignments.$inferSelect;
 export type Submission = typeof submissions.$inferSelect;
 export type GradingResult = typeof gradingResults.$inferSelect;
 export type PlagiarismResult = typeof plagiarismResults.$inferSelect;
+export type OtpRequest = typeof otpRequests.$inferSelect;
 
 export type InsertCollege = z.infer<typeof insertCollegeSchema>;
 export type InsertUser = z.infer<typeof insertUserSchema>;
@@ -137,4 +170,5 @@ export type InsertAssignment = z.infer<typeof insertAssignmentSchema>;
 export type InsertSubmission = z.infer<typeof insertSubmissionSchema>;
 export type InsertGradingResult = z.infer<typeof insertGradingResultSchema>;
 export type InsertPlagiarismResult = z.infer<typeof insertPlagiarismResultSchema>;
+export type InsertOtpRequest = z.infer<typeof insertOtpRequestSchema>;
 export type LoginData = z.infer<typeof loginSchema>;

@@ -8,7 +8,9 @@ import { insertAssignmentSchema, insertSubmissionSchema, loginSchema, colleges }
 import { gradeAssignment } from "./services/openai";
 import { processUploadedFile, validateFileUpload } from "./services/fileProcessor";
 import { checkPlagiarism, getPlagiarismResult } from "./services/plagiarismService";
-import { sendSubmissionConfirmationEmail } from "./services/emailService";
+import { sendSubmissionConfirmationEmail, sendOtpEmail } from "./services/emailService";
+import { otpRequestSchema, otpVerifySchema } from "@shared/schema";
+import crypto from "crypto";
 import { db } from "./db";
 import { users } from "@shared/schema";
 import { eq } from "drizzle-orm";
@@ -707,6 +709,121 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // ======== OTP VERIFICATION ROUTES ========
+
+  // Request OTP for email verification
+  app.post("/api/public/:collegeCode/otp/request", async (req, res) => {
+    try {
+      const college = await storage.getCollegeByCode(req.params.collegeCode);
+      if (!college || !college.isActive) {
+        return res.status(404).json({ message: "College not found" });
+      }
+
+      const parsed = otpRequestSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ message: "Valid email is required" });
+      }
+
+      const { email, assignmentId } = parsed.data;
+      const normalizedEmail = email.toLowerCase().trim();
+
+      // Rate limiting: max 3 requests per email per 15 minutes
+      const recentRequests = await storage.getRecentOtpRequestsByEmail(normalizedEmail, college.id, 15);
+      if (recentRequests.length >= 3) {
+        return res.status(429).json({ 
+          message: "Too many verification requests. Please wait a few minutes before trying again." 
+        });
+      }
+
+      // Generate 6-digit OTP
+      const otp = crypto.randomInt(100000, 999999).toString();
+      
+      // Hash OTP for storage (simple hash for demo - use bcrypt in production)
+      const otpHash = crypto.createHash('sha256').update(otp).digest('hex');
+
+      // Set expiry to 10 minutes from now
+      const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
+
+      // Store OTP request
+      const otpRequest = await storage.createOtpRequest({
+        email: normalizedEmail,
+        collegeId: college.id,
+        assignmentId: assignmentId || null,
+        otpHash,
+        expiresAt,
+      });
+
+      // Send OTP email
+      const emailSent = await sendOtpEmail(normalizedEmail, otp, college.name);
+      
+      if (!emailSent) {
+        return res.status(500).json({ message: "Failed to send verification email. Please try again." });
+      }
+
+      res.json({ 
+        message: "Verification code sent to your email",
+        requestId: otpRequest.id,
+        expiresAt: expiresAt.toISOString()
+      });
+    } catch (error) {
+      console.error("OTP request error:", error);
+      res.status(500).json({ message: "Failed to send verification code" });
+    }
+  });
+
+  // Verify OTP
+  app.post("/api/public/:collegeCode/otp/verify", async (req, res) => {
+    try {
+      const parsed = otpVerifySchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ message: "Request ID and OTP are required" });
+      }
+
+      const { requestId, otp } = parsed.data;
+
+      const otpRequest = await storage.getOtpRequest(requestId);
+      if (!otpRequest) {
+        return res.status(404).json({ message: "Invalid verification request" });
+      }
+
+      // Check if expired
+      if (new Date() > new Date(otpRequest.expiresAt)) {
+        await storage.updateOtpRequest(requestId, { status: "expired" });
+        return res.status(400).json({ message: "Verification code has expired. Please request a new one." });
+      }
+
+      // Check if already verified
+      if (otpRequest.status === "verified") {
+        return res.status(400).json({ message: "This code has already been used" });
+      }
+
+      // Check attempt limit (max 5 attempts)
+      if (otpRequest.attempts >= 5) {
+        await storage.updateOtpRequest(requestId, { status: "expired" });
+        return res.status(400).json({ message: "Too many failed attempts. Please request a new code." });
+      }
+
+      // Verify OTP
+      const otpHash = crypto.createHash('sha256').update(otp).digest('hex');
+      if (otpHash !== otpRequest.otpHash) {
+        await storage.updateOtpRequest(requestId, { attempts: otpRequest.attempts + 1 });
+        return res.status(400).json({ message: "Invalid verification code" });
+      }
+
+      // Mark as verified
+      await storage.updateOtpRequest(requestId, { status: "verified" });
+
+      res.json({ 
+        message: "Email verified successfully",
+        verified: true,
+        email: otpRequest.email
+      });
+    } catch (error) {
+      console.error("OTP verify error:", error);
+      res.status(500).json({ message: "Verification failed" });
+    }
+  });
+
   // Student submission (public - no auth required) - supports slug or ID
   app.post("/api/public/:collegeCode/assignments/:slugOrId/submit", upload.single("file"), async (req, res) => {
     try {
@@ -720,11 +837,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Assignment not found" });
       }
 
-      // Validate student name, ID, and email
-      const { studentName, studentId, studentEmail } = req.body;
+      // Validate student name, ID, email, and OTP verification
+      const { studentName, studentId, studentEmail, otpRequestId } = req.body;
       if (!studentName || !studentId) {
         return res.status(400).json({ message: "Student name and ID are required" });
       }
+
+      // Require OTP verification
+      if (!otpRequestId) {
+        return res.status(400).json({ message: "Email verification is required. Please verify your email first." });
+      }
+
+      // Validate OTP verification
+      const otpRequest = await storage.getOtpRequest(otpRequestId);
+      if (!otpRequest || otpRequest.status !== "verified") {
+        return res.status(400).json({ message: "Email not verified. Please verify your email first." });
+      }
+
+      // Use the verified email from OTP request
+      const verifiedEmail = otpRequest.email;
 
       // Validate file exists
       if (!req.file && !req.body.content) {
@@ -773,7 +904,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         assignmentId: assignment.id,
         studentName,
         studentId,
-        studentEmail: studentEmail || null,
+        studentEmail: verifiedEmail,
         content,
         fileName,
         rawFileData,

@@ -1,6 +1,6 @@
-import { type User, type InsertUser, type Assignment, type InsertAssignment, type Submission, type InsertSubmission, type GradingResult, type InsertGradingResult, type College, type InsertCollege, type PlagiarismResult, type InsertPlagiarismResult, users, assignments, submissions, gradingResults, colleges, plagiarismResults } from "@shared/schema";
+import { type User, type InsertUser, type Assignment, type InsertAssignment, type Submission, type InsertSubmission, type GradingResult, type InsertGradingResult, type College, type InsertCollege, type PlagiarismResult, type InsertPlagiarismResult, type OtpRequest, type InsertOtpRequest, users, assignments, submissions, gradingResults, colleges, plagiarismResults, otpRequests } from "@shared/schema";
 import { db } from "./db";
-import { eq, and, sql, or, like } from "drizzle-orm";
+import { eq, and, sql, or, like, lt, gt } from "drizzle-orm";
 
 export interface IStorage {
   getCollege(id: string): Promise<College | undefined>;
@@ -56,6 +56,12 @@ export interface IStorage {
   createPlagiarismResult(result: InsertPlagiarismResult): Promise<PlagiarismResult>;
   deletePlagiarismResult(submissionId: string): Promise<boolean>;
   getSubmissionsForPlagiarismCheck(assignmentId: string, excludeSubmissionId: string): Promise<Submission[]>;
+
+  createOtpRequest(request: InsertOtpRequest): Promise<OtpRequest>;
+  getOtpRequest(id: string): Promise<OtpRequest | undefined>;
+  updateOtpRequest(id: string, data: Partial<OtpRequest>): Promise<OtpRequest | undefined>;
+  getRecentOtpRequestsByEmail(email: string, collegeId: string, minutesAgo: number): Promise<OtpRequest[]>;
+  cleanupExpiredOtpRequests(): Promise<number>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -390,6 +396,48 @@ export class DatabaseStorage implements IStorage {
   async getSubmissionsForPlagiarismCheck(assignmentId: string, excludeSubmissionId: string): Promise<Submission[]> {
     const allSubmissions = await this.getSubmissions(assignmentId);
     return allSubmissions.filter(s => s.id !== excludeSubmissionId && s.content && s.content.trim().length > 0);
+  }
+
+  async createOtpRequest(request: InsertOtpRequest): Promise<OtpRequest> {
+    const [otpRequest] = await db.insert(otpRequests).values({
+      email: request.email,
+      collegeId: request.collegeId,
+      assignmentId: request.assignmentId || null,
+      otpHash: request.otpHash,
+      expiresAt: request.expiresAt,
+    }).returning();
+    return otpRequest;
+  }
+
+  async getOtpRequest(id: string): Promise<OtpRequest | undefined> {
+    const [request] = await db.select().from(otpRequests).where(eq(otpRequests.id, id));
+    return request;
+  }
+
+  async updateOtpRequest(id: string, data: Partial<OtpRequest>): Promise<OtpRequest | undefined> {
+    const [updated] = await db.update(otpRequests)
+      .set(data)
+      .where(eq(otpRequests.id, id))
+      .returning();
+    return updated;
+  }
+
+  async getRecentOtpRequestsByEmail(email: string, collegeId: string, minutesAgo: number): Promise<OtpRequest[]> {
+    const cutoffTime = new Date(Date.now() - minutesAgo * 60 * 1000);
+    return db.select().from(otpRequests).where(
+      and(
+        eq(otpRequests.email, email.toLowerCase()),
+        eq(otpRequests.collegeId, collegeId),
+        gt(otpRequests.createdAt, cutoffTime)
+      )
+    );
+  }
+
+  async cleanupExpiredOtpRequests(): Promise<number> {
+    const result = await db.delete(otpRequests).where(
+      lt(otpRequests.expiresAt, new Date())
+    ).returning();
+    return result.length;
   }
 }
 

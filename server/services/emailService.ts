@@ -152,6 +152,71 @@ export async function sendSubmissionConfirmationEmail(
   }
 }
 
+export async function sendOtpEmail(
+  studentEmail: string,
+  otp: string,
+  collegeName: string
+): Promise<boolean> {
+  try {
+    const gmail = await getGmailClient();
+
+    const subject = `Your Verification Code - ${collegeName}`;
+    
+    const body = `
+<!DOCTYPE html>
+<html>
+<head>
+  <style>
+    body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+    .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+    .header { background: linear-gradient(135deg, #4F46E5 0%, #7C3AED 100%); color: white; padding: 30px; text-align: center; border-radius: 8px 8px 0 0; }
+    .content { background: #f9fafb; padding: 30px; border: 1px solid #e5e7eb; }
+    .footer { background: #f3f4f6; padding: 20px; text-align: center; font-size: 12px; color: #6b7280; border-radius: 0 0 8px 8px; }
+    .otp-box { background: #4F46E5; color: white; font-size: 32px; font-weight: bold; letter-spacing: 8px; padding: 20px 40px; border-radius: 8px; display: inline-block; margin: 20px 0; }
+    .warning { color: #dc2626; font-size: 14px; margin-top: 15px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1 style="margin: 0;">Email Verification</h1>
+    </div>
+    <div class="content" style="text-align: center;">
+      <p>You are submitting an assignment at <strong>${collegeName}</strong>.</p>
+      <p>Please use the following verification code to proceed:</p>
+      
+      <div class="otp-box">${otp}</div>
+      
+      <p>This code will expire in <strong>10 minutes</strong>.</p>
+      
+      <p class="warning">If you did not request this code, please ignore this email.</p>
+    </div>
+    <div class="footer">
+      <p>This is an automated message. Please do not reply to this email.</p>
+      <p>&copy; ${new Date().getFullYear()} AI Assignment Grader</p>
+    </div>
+  </div>
+</body>
+</html>
+`;
+
+    const encodedMessage = createEmailMessage(studentEmail, subject, body);
+    
+    await gmail.users.messages.send({
+      userId: 'me',
+      requestBody: {
+        raw: encodedMessage
+      }
+    });
+
+    console.log(`OTP email sent to ${studentEmail}`);
+    return true;
+  } catch (error) {
+    console.error('Failed to send OTP email:', error);
+    return false;
+  }
+}
+
 export async function isEmailServiceConfigured(): Promise<boolean> {
   try {
     await getAccessToken();
