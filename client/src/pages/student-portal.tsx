@@ -125,15 +125,22 @@ export default function StudentPortal() {
 
   const submitMutation = useMutation({
     mutationFn: async (formData: FormData) => {
-      const res = await fetch(`/api/public/${collegeCode}/assignments/${selectedAssignment}/submit`, {
-        method: "POST",
-        body: formData,
-      });
-      if (!res.ok) {
-        const error = await res.json();
-        throw new Error(error.message || "Submission failed");
+      try {
+        const res = await fetch(`/api/public/${collegeCode}/assignments/${selectedAssignment}/submit`, {
+          method: "POST",
+          body: formData,
+        });
+        if (!res.ok) {
+          const error = await res.json();
+          throw new Error(error.message || "Submission failed");
+        }
+        return res.json();
+      } catch (error) {
+        if (error instanceof TypeError && error.message === "Failed to fetch") {
+          throw new Error("Network connection lost. Please check your internet and try again.");
+        }
+        throw error;
       }
-      return res.json();
     },
     onSuccess: () => {
       setIsSubmitted(true);
