@@ -1046,14 +1046,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         content = processedFile.content;
         fileName = processedFile.originalName;
         
+        // Always store raw file data for download capability
+        rawFileData = req.file.buffer.toString('base64');
+        fileMimeType = req.file.mimetype;
+        
         // Check if content is mostly empty (likely image-based PDF/PPTX that needs Vision processing)
         const contentWithoutPageMarkers = content.replace(/---\s*Page\s*\d+\s*---/g, '').replace(/---\s*Slide\s*\d+\s*---/g, '').trim();
         const hasSubstantiveContent = contentWithoutPageMarkers.length > 50;
         
         if (!hasSubstantiveContent) {
-          // Store raw file for background Vision processing
-          rawFileData = req.file.buffer.toString('base64');
-          fileMimeType = req.file.mimetype;
           needsVisionProcessing = true;
           content = "[Processing images - grading will complete shortly...]";
         }
