@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
-import { Search, FileText, User, Calendar, CheckCircle, Clock, Download, FileSpreadsheet, Trash2, Shield, AlertTriangle, Bot, Users } from "lucide-react";
+import { Search, FileText, User, Calendar, CheckCircle, Clock, Download, FileSpreadsheet, Trash2, Shield, AlertTriangle, Bot, Users, RefreshCw, Mail } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -41,6 +41,8 @@ export default function Submissions() {
 
   const [checkingPlagiarism, setCheckingPlagiarism] = useState<string | null>(null);
   const [plagiarismResults, setPlagiarismResults] = useState<Record<string, any>>({});
+  const [regrading, setRegrading] = useState<string | null>(null);
+  const [sendingEmail, setSendingEmail] = useState<string | null>(null);
 
   const deleteSubmissionMutation = useMutation({
     mutationFn: async (id: string) => {
@@ -98,6 +100,52 @@ export default function Submissions() {
     }
   };
 
+  const downloadFile = (submissionId: string) => {
+    window.open(`/api/submissions/${submissionId}/download`, '_blank');
+  };
+
+  const regradeSubmission = async (submissionId: string) => {
+    setRegrading(submissionId);
+    try {
+      const response = await apiRequest("POST", `/api/submissions/${submissionId}/regrade`);
+      const result = await response.json();
+      toast({
+        title: "Regrading Complete",
+        description: `New grade: ${result.result.grade} (${result.result.score}/${result.result.maxScore})`,
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/assignments"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/stats"] });
+    } catch (error: any) {
+      toast({
+        title: "Regrade Failed",
+        description: error?.message || "Failed to regrade submission",
+        variant: "destructive",
+      });
+    } finally {
+      setRegrading(null);
+    }
+  };
+
+  const sendEvaluationEmail = async (submissionId: string) => {
+    setSendingEmail(submissionId);
+    try {
+      const response = await apiRequest("POST", `/api/submissions/${submissionId}/email-evaluation`);
+      const result = await response.json();
+      toast({
+        title: "Email Sent",
+        description: result.message,
+      });
+    } catch (error: any) {
+      toast({
+        title: "Email Failed",
+        description: error?.message || "Failed to send evaluation email",
+        variant: "destructive",
+      });
+    } finally {
+      setSendingEmail(null);
+    }
+  };
+
   interface Assignment {
     id: string;
     title: string;
@@ -108,8 +156,10 @@ export default function Submissions() {
     assignmentId: string;
     studentName: string;
     studentId: string;
+    studentEmail?: string;
     content: string;
     fileName?: string;
+    rawFileData?: string;
     submittedAt: string;
     isGraded: boolean;
     assignmentTitle?: string;
@@ -228,12 +278,14 @@ export default function Submissions() {
         return;
       }
 
-      const headers = ["Assignment", "Student Name", "Student ID", "File Name", "Submitted At", "Status", "Grade", "Score", "Max Score", "Percentage", "Feedback"];
+      const baseUrl = window.location.origin;
+      const headers = ["Assignment", "Student Name", "Student ID", "File Name", "File Download Link", "Submitted At", "Status", "Grade", "Score", "Max Score", "Percentage", "Feedback"];
       const rows = data.map((item: any) => [
         item.assignmentTitle,
         item.studentName,
         item.studentId,
         item.fileName || "Text submission",
+        item.hasFile ? `${baseUrl}/api/submissions/${item.id}/download` : "N/A",
         new Date(item.submittedAt).toLocaleString(),
         item.isGraded ? "Graded" : "Pending",
         item.grade || "N/A",
@@ -307,12 +359,14 @@ export default function Submissions() {
           <h1>Submissions Report${exportDate ? ` - ${format(exportDate, "MMMM d, yyyy")}` : ""}</h1>
       `;
 
+      const baseUrl = window.location.origin;
       for (const item of data) {
+        const downloadLink = item.hasFile ? `${baseUrl}/api/submissions/${item.id}/download` : null;
         htmlContent += `
           <div class="submission">
             <div class="submission-header">${item.studentName} (${item.studentId})</div>
             <div class="field"><span class="label">Assignment:</span> ${item.assignmentTitle}</div>
-            <div class="field"><span class="label">File:</span> ${item.fileName || "Text submission"}</div>
+            <div class="field"><span class="label">File:</span> ${item.fileName || "Text submission"}${downloadLink ? ` (<a href="${downloadLink}">Download</a>)` : ""}</div>
             <div class="field"><span class="label">Submitted:</span> ${new Date(item.submittedAt).toLocaleString()}</div>
             <div class="field"><span class="label">Status:</span> ${item.isGraded ? "Graded" : "Pending"}</div>
             ${item.isGraded ? `
@@ -576,6 +630,52 @@ export default function Submissions() {
                     <Calendar className="mr-2 w-4 h-4" />
                     <span>Submitted {new Date(submission.submittedAt).toLocaleDateString()}</span>
                   </div>
+                </div>
+
+                <div className="flex flex-wrap gap-2 mb-4">
+                  {submission.fileName && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => downloadFile(submission.id)}
+                      data-testid={`button-download-${submission.id}`}
+                    >
+                      <Download className="h-4 w-4 mr-2" />
+                      Download File
+                    </Button>
+                  )}
+                  
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => regradeSubmission(submission.id)}
+                    disabled={regrading === submission.id}
+                    data-testid={`button-regrade-${submission.id}`}
+                  >
+                    {regrading === submission.id ? (
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-current mr-2" />
+                    ) : (
+                      <RefreshCw className="h-4 w-4 mr-2" />
+                    )}
+                    {submission.isGraded ? "Regrade" : "Grade"}
+                  </Button>
+                  
+                  {submission.isGraded && submission.studentEmail && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => sendEvaluationEmail(submission.id)}
+                      disabled={sendingEmail === submission.id}
+                      data-testid={`button-email-evaluation-${submission.id}`}
+                    >
+                      {sendingEmail === submission.id ? (
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-current mr-2" />
+                      ) : (
+                        <Mail className="h-4 w-4 mr-2" />
+                      )}
+                      Email Evaluation
+                    </Button>
+                  )}
                 </div>
 
                 {plagiarismResults[submission.id] && (

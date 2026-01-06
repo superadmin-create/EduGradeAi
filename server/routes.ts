@@ -8,7 +8,7 @@ import { insertAssignmentSchema, insertSubmissionSchema, loginSchema, colleges }
 import { gradeAssignment } from "./services/openai";
 import { processUploadedFile, validateFileUpload } from "./services/fileProcessor";
 import { checkPlagiarism, getPlagiarismResult } from "./services/plagiarismService";
-import { sendSubmissionConfirmationEmail, sendOtpEmail } from "./services/emailService";
+import { sendSubmissionConfirmationEmail, sendOtpEmail, sendEvaluationEmail } from "./services/emailService";
 import { otpRequestSchema, otpVerifySchema } from "@shared/schema";
 import crypto from "crypto";
 import { db } from "./db";
@@ -614,6 +614,176 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // File download endpoint
+  app.get("/api/submissions/:id/download", requireAuth, async (req, res) => {
+    try {
+      const collegeId = req.session.collegeId!;
+      
+      const submission = await storage.getSubmission(req.params.id);
+      if (!submission) {
+        return res.status(404).json({ message: "Submission not found" });
+      }
+
+      // Verify submission belongs to authenticated college
+      const assignment = await storage.getAssignment(submission.assignmentId);
+      if (!assignment) {
+        return res.status(404).json({ message: "Assignment not found" });
+      }
+      const assignmentUser = await storage.getUser(assignment.userId);
+      if (!assignmentUser || assignmentUser.collegeId !== collegeId) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+
+      if (!submission.rawFileData || !submission.fileName) {
+        return res.status(404).json({ message: "No file available for this submission" });
+      }
+
+      const fileBuffer = Buffer.from(submission.rawFileData, 'base64');
+      const mimeType = submission.fileMimeType || 'application/octet-stream';
+      
+      res.setHeader('Content-Type', mimeType);
+      res.setHeader('Content-Disposition', `attachment; filename="${submission.fileName}"`);
+      res.setHeader('Content-Length', fileBuffer.length);
+      res.send(fileBuffer);
+    } catch (error) {
+      console.error('File download error:', error);
+      res.status(500).json({ message: "Failed to download file" });
+    }
+  });
+
+  // Regrade submission endpoint
+  app.post("/api/submissions/:id/regrade", requireAuth, async (req, res) => {
+    try {
+      const collegeId = req.session.collegeId!;
+      
+      const submission = await storage.getSubmission(req.params.id);
+      if (!submission) {
+        return res.status(404).json({ message: "Submission not found" });
+      }
+
+      const assignment = await storage.getAssignment(submission.assignmentId);
+      if (!assignment) {
+        return res.status(404).json({ message: "Assignment not found" });
+      }
+
+      // Verify submission belongs to authenticated college
+      const assignmentUser = await storage.getUser(assignment.userId);
+      if (!assignmentUser || assignmentUser.collegeId !== collegeId) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+
+      // Check quota
+      const college = await storage.getCollege(collegeId);
+      if (!college) {
+        return res.status(404).json({ message: "College not found" });
+      }
+
+      if (college.quota !== null && college.usedQuota >= college.quota) {
+        return res.status(403).json({ message: "Grading quota exceeded. Please contact administrator." });
+      }
+
+      // Run grading FIRST before deleting existing result (avoid data loss on failure)
+      const gradingResult = await gradeAssignment({
+        caseStudyContent: assignment.caseStudyContent,
+        studentResponse: submission.content,
+        maxPoints: assignment.maxPoints,
+        assignmentTitle: assignment.title,
+      });
+
+      // Only delete existing result after successful grading
+      await storage.deleteGradingResult(submission.id);
+
+      // Update quota after successful grading
+      await storage.incrementCollegeUsedQuota(collegeId);
+
+      // Save new grading result
+      const result = await storage.createGradingResult({
+        submissionId: submission.id,
+        aiAnalysis: gradingResult,
+        finalScore: gradingResult.score,
+        maxScore: assignment.maxPoints,
+        percentage: gradingResult.percentage,
+        feedback: gradingResult.feedback,
+      });
+
+      // Update submission status
+      await storage.updateSubmission(submission.id, { isGraded: true });
+
+      res.json({ 
+        message: "Submission regraded successfully", 
+        result: {
+          grade: result.aiAnalysis.grade,
+          score: result.finalScore,
+          maxScore: assignment.maxPoints,
+          feedback: result.feedback
+        }
+      });
+    } catch (error) {
+      console.error('Regrade error:', error);
+      res.status(500).json({ message: "Failed to regrade submission", error: (error as Error).message });
+    }
+  });
+
+  // Email evaluation to student endpoint
+  app.post("/api/submissions/:id/email-evaluation", requireAuth, async (req, res) => {
+    try {
+      const collegeId = req.session.collegeId!;
+      
+      const submission = await storage.getSubmission(req.params.id);
+      if (!submission) {
+        return res.status(404).json({ message: "Submission not found" });
+      }
+
+      const assignment = await storage.getAssignment(submission.assignmentId);
+      if (!assignment) {
+        return res.status(404).json({ message: "Assignment not found" });
+      }
+
+      // Verify submission belongs to authenticated college
+      const assignmentUser = await storage.getUser(assignment.userId);
+      if (!assignmentUser || assignmentUser.collegeId !== collegeId) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+
+      if (!submission.studentEmail) {
+        return res.status(400).json({ message: "No email address available for this student" });
+      }
+
+      const gradingResult = await storage.getGradingResult(req.params.id);
+      if (!gradingResult) {
+        return res.status(400).json({ message: "Submission has not been graded yet" });
+      }
+
+      const college = await storage.getCollege(collegeId);
+      if (!college) {
+        return res.status(404).json({ message: "College not found" });
+      }
+
+      const percentage = Math.round((gradingResult.finalScore / assignment.maxPoints) * 100);
+
+      const success = await sendEvaluationEmail(
+        submission.studentEmail,
+        submission.studentName,
+        assignment.title,
+        college.name,
+        gradingResult.aiAnalysis.grade || 'N/A',
+        gradingResult.finalScore,
+        assignment.maxPoints,
+        percentage,
+        gradingResult.feedback || 'No feedback provided.'
+      );
+
+      if (success) {
+        res.json({ message: "Evaluation email sent successfully" });
+      } else {
+        res.status(500).json({ message: "Failed to send evaluation email" });
+      }
+    } catch (error) {
+      console.error('Email evaluation error:', error);
+      res.status(500).json({ message: "Failed to send evaluation email", error: (error as Error).message });
+    }
+  });
+
   // Statistics
   app.get("/api/stats", requireAuth, async (req, res) => {
     try {
@@ -992,10 +1162,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const gradingResult = await storage.getGradingResult(submission.id);
           
           exportData.push({
+            id: submission.id,
             assignmentTitle: assignment.title,
             studentName: submission.studentName,
             studentId: submission.studentId,
             fileName: submission.fileName,
+            hasFile: !!(submission.rawFileData && submission.fileName),
             submittedAt: submission.submittedAt,
             isGraded: submission.isGraded,
             grade: gradingResult?.aiAnalysis?.grade || null,

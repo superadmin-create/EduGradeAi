@@ -32,6 +32,7 @@ export interface IStorage {
   getGradingResult(submissionId: string): Promise<GradingResult | undefined>;
   getGradingResults(assignmentId: string): Promise<GradingResult[]>;
   createGradingResult(result: InsertGradingResult): Promise<GradingResult>;
+  deleteGradingResult(submissionId: string): Promise<boolean>;
   
   getPendingSubmissions(): Promise<Submission[]>;
   getSubmissionsNeedingVisionProcessing(): Promise<Submission[]>;
@@ -259,6 +260,11 @@ export class DatabaseStorage implements IStorage {
     await this.updateSubmission(result.submissionId, { isGraded: true });
     
     return result;
+  }
+
+  async deleteGradingResult(submissionId: string): Promise<boolean> {
+    await db.delete(gradingResults).where(eq(gradingResults.submissionId, submissionId));
+    return true;
   }
 
   async getPendingSubmissions(): Promise<Submission[]> {

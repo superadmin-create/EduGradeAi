@@ -273,3 +273,113 @@ export async function isEmailServiceConfigured(): Promise<boolean> {
     return false;
   }
 }
+
+export async function sendEvaluationEmail(
+  studentEmail: string,
+  studentName: string,
+  assignmentTitle: string,
+  collegeName: string,
+  grade: string,
+  score: number,
+  maxScore: number,
+  percentage: number,
+  feedback: string
+): Promise<boolean> {
+  const subject = `Your Evaluation Results - ${assignmentTitle} | ${collegeName}`;
+  
+  const feedbackHtml = feedback.replace(/\n/g, '<br>');
+  
+  const body = `
+<!DOCTYPE html>
+<html>
+<head>
+  <style>
+    body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+    .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+    .header { background: linear-gradient(135deg, #4F46E5 0%, #7C3AED 100%); color: white; padding: 30px; text-align: center; border-radius: 8px 8px 0 0; }
+    .content { background: #f9fafb; padding: 30px; border: 1px solid #e5e7eb; }
+    .footer { background: #f3f4f6; padding: 20px; text-align: center; font-size: 12px; color: #6b7280; border-radius: 0 0 8px 8px; }
+    .grade-box { background: #4F46E5; color: white; font-size: 48px; font-weight: bold; padding: 20px 40px; border-radius: 8px; display: inline-block; margin: 20px 0; }
+    .score-details { background: white; padding: 15px; border-radius: 8px; margin: 20px 0; border: 1px solid #e5e7eb; }
+    .score-row { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #f0f0f0; }
+    .score-row:last-child { border-bottom: none; }
+    .feedback-section { background: white; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #4F46E5; }
+    .feedback-title { font-weight: bold; color: #4F46E5; margin-bottom: 10px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1 style="margin: 0;">Evaluation Results</h1>
+      <p style="margin: 10px 0 0 0; opacity: 0.9;">${assignmentTitle}</p>
+    </div>
+    <div class="content" style="text-align: center;">
+      <p>Dear <strong>${studentName}</strong>,</p>
+      <p>Your assignment has been evaluated. Here are your results:</p>
+      
+      <div class="grade-box">${grade}</div>
+      
+      <div class="score-details" style="text-align: left;">
+        <div class="score-row">
+          <span><strong>Score:</strong></span>
+          <span>${score} / ${maxScore}</span>
+        </div>
+        <div class="score-row">
+          <span><strong>Percentage:</strong></span>
+          <span>${percentage}%</span>
+        </div>
+      </div>
+      
+      <div class="feedback-section" style="text-align: left;">
+        <div class="feedback-title">Feedback</div>
+        <div>${feedbackHtml}</div>
+      </div>
+      
+      <p style="text-align: left; margin-top: 20px;">If you have any questions about your evaluation, please contact your professor.</p>
+      
+      <p style="text-align: left;">Best regards,<br>
+      <strong>${collegeName} - AI Assignment Grader</strong></p>
+    </div>
+    <div class="footer">
+      <p>This is an automated message. Please do not reply to this email.</p>
+      <p>&copy; ${new Date().getFullYear()} AI Assignment Grader</p>
+    </div>
+  </div>
+</body>
+</html>
+`;
+
+  const encodedMessage = createEmailMessage(studentEmail, subject, body);
+
+  async function trySendEmail(forceRefresh: boolean): Promise<void> {
+    console.log(`Attempting to send evaluation email to ${studentEmail}... (forceRefresh: ${forceRefresh})`);
+    const gmail = await getGmailClient(forceRefresh);
+    
+    await gmail.users.messages.send({
+      userId: 'me',
+      requestBody: {
+        raw: encodedMessage
+      }
+    });
+  }
+
+  try {
+    await trySendEmail(false);
+    console.log(`Evaluation email sent to ${studentEmail} for assignment: ${assignmentTitle}`);
+    return true;
+  } catch (error: any) {
+    if (error?.status === 401 || error?.code === 401) {
+      console.log('Got 401 error, retrying with token refresh...');
+      try {
+        await trySendEmail(true);
+        console.log(`Evaluation email sent to ${studentEmail} (after token refresh)`);
+        return true;
+      } catch (retryError) {
+        console.error('Failed to send evaluation email after token refresh:', retryError);
+        return false;
+      }
+    }
+    console.error('Failed to send evaluation email:', error);
+    return false;
+  }
+}
