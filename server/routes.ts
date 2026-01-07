@@ -14,6 +14,7 @@ import crypto from "crypto";
 import { db } from "./db";
 import { users } from "@shared/schema";
 import { eq } from "drizzle-orm";
+import { pushToGitHub } from "./services/githubService";
 
 // Generate URL-friendly slug from title
 function generateSlug(title: string): string {
@@ -781,6 +782,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error('Email evaluation error:', error);
       res.status(500).json({ message: "Failed to send evaluation email", error: (error as Error).message });
+    }
+  });
+
+  // Push to GitHub endpoint
+  app.post("/api/push-to-github", requireAuth, async (req, res) => {
+    try {
+      const repoName = req.body.repoName || 'ai-assignment-grader';
+      console.log(`Starting GitHub push to repository: ${repoName}`);
+      
+      const result = await pushToGitHub(repoName);
+      
+      if (result.success) {
+        res.json({ 
+          message: "Successfully pushed to GitHub!", 
+          repoUrl: result.repoUrl 
+        });
+      } else {
+        res.status(500).json({ 
+          message: "Failed to push to GitHub", 
+          error: result.error 
+        });
+      }
+    } catch (error) {
+      console.error('GitHub push error:', error);
+      res.status(500).json({ message: "Failed to push to GitHub", error: (error as Error).message });
     }
   });
 
