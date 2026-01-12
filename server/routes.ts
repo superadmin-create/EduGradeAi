@@ -321,9 +321,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
           await storage.createGradingResult({
             submissionId: submission.id,
             aiAnalysis: gradingResult,
-            finalScore: gradingResult.score,
-            maxScore: gradingResult.maxScore,
-            percentage: gradingResult.percentage,
+            finalScore: Math.round(gradingResult.score),
+            maxScore: Math.round(gradingResult.maxScore),
+            percentage: Math.round(gradingResult.percentage),
             feedback: gradingResult.feedback,
           });
           
@@ -446,9 +446,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const result = await storage.createGradingResult({
         submissionId: submission.id,
         aiAnalysis: gradingResult,
-        finalScore: gradingResult.score,
-        maxScore: gradingResult.maxScore,
-        percentage: gradingResult.percentage,
+        finalScore: Math.round(gradingResult.score),
+        maxScore: Math.round(gradingResult.maxScore),
+        percentage: Math.round(gradingResult.percentage),
         feedback: gradingResult.feedback,
       });
       
@@ -497,9 +497,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const result = await storage.createGradingResult({
             submissionId: submission.id,
             aiAnalysis: gradingResult,
-            finalScore: gradingResult.score,
-            maxScore: gradingResult.maxScore,
-            percentage: gradingResult.percentage,
+            finalScore: Math.round(gradingResult.score),
+            maxScore: Math.round(gradingResult.maxScore),
+            percentage: Math.round(gradingResult.percentage),
             feedback: gradingResult.feedback,
           });
 
@@ -701,9 +701,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const result = await storage.createGradingResult({
         submissionId: submission.id,
         aiAnalysis: gradingResult,
-        finalScore: gradingResult.score,
+        finalScore: Math.round(gradingResult.score),
         maxScore: assignment.maxPoints,
-        percentage: gradingResult.percentage,
+        percentage: Math.round(gradingResult.percentage),
         feedback: gradingResult.feedback,
       });
 
@@ -1141,9 +1141,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
             await storage.createGradingResult({
               submissionId: submission.id,
               aiAnalysis: gradingResult,
-              finalScore: gradingResult.score,
-              maxScore: gradingResult.maxScore,
-              percentage: gradingResult.percentage,
+              finalScore: Math.round(gradingResult.score),
+              maxScore: Math.round(gradingResult.maxScore),
+              percentage: Math.round(gradingResult.percentage),
               feedback: gradingResult.feedback,
             });
             

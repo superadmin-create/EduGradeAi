@@ -104,9 +104,9 @@ export async function processVisionSubmissions(): Promise<void> {
           await storage.createGradingResult({
             submissionId: submission.id,
             aiAnalysis: gradingResult,
-            finalScore: gradingResult.score,
-            maxScore: gradingResult.maxScore,
-            percentage: gradingResult.percentage,
+            finalScore: Math.round(gradingResult.score),
+            maxScore: Math.round(gradingResult.maxScore),
+            percentage: Math.round(gradingResult.percentage),
             feedback: gradingResult.feedback,
           });
           
@@ -188,9 +188,9 @@ export async function processPendingSubmissions(): Promise<void> {
         await storage.createGradingResult({
           submissionId: submission.id,
           aiAnalysis: gradingResult,
-          finalScore: gradingResult.score,
-          maxScore: gradingResult.maxScore,
-          percentage: gradingResult.percentage,
+          finalScore: Math.round(gradingResult.score),
+          maxScore: Math.round(gradingResult.maxScore),
+          percentage: Math.round(gradingResult.percentage),
           feedback: gradingResult.feedback,
         });
         
