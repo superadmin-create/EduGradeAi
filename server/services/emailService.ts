@@ -102,7 +102,8 @@ async function getGmailClient(forceRefresh = false) {
     {
       headers: {
         'Accept': 'application/json',
-        'X_REPLIT_TOKEN': xReplitToken
+        'X_REPLIT_TOKEN': xReplitToken,
+        'Cache-Control': 'no-cache'
       }
     }
   );
@@ -110,11 +111,23 @@ async function getGmailClient(forceRefresh = false) {
   const connection = data.items?.[0];
 
   if (!connection?.settings) {
+    console.error('No connection found, raw response:', JSON.stringify(data, null, 2));
     throw new Error('Gmail not connected');
   }
 
+  // Log all available settings to debug
+  const creds = connection.settings.oauth?.credentials;
+  console.log('Connection debug:', {
+    hasDirectToken: !!connection.settings.access_token,
+    hasOauthCreds: !!creds,
+    expiresAt: creds?.expires_at,
+    expiresIn: creds?.expires_in,
+    tokenFirstChars: creds?.access_token?.substring(0, 10),
+    currentTime: new Date().toISOString()
+  });
+
   // Try direct access_token first, then oauth credentials
-  const accessToken = connection.settings.access_token || connection.settings.oauth?.credentials?.access_token;
+  const accessToken = connection.settings.access_token || creds?.access_token;
   
   if (!accessToken) {
     throw new Error('Gmail access token not available');
