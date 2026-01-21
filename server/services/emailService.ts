@@ -54,14 +54,28 @@ async function getAccessToken(forceRefresh = false) {
       throw new Error('Gmail not connected - please set up Gmail integration');
     }
 
-    const accessToken = connectionSettings?.settings?.access_token || connectionSettings?.settings?.oauth?.credentials?.access_token;
+    const oauthToken = connectionSettings?.settings?.oauth?.credentials?.access_token;
+    const directToken = connectionSettings?.settings?.access_token;
+    
+    console.log('Token analysis:', JSON.stringify({
+      directTokenLength: directToken?.length,
+      oauthTokenLength: oauthToken?.length,
+      tokensMatch: directToken === oauthToken,
+      oauthExpiresAt: connectionSettings?.settings?.oauth?.credentials?.expiry_date,
+      settingsExpiresAt: connectionSettings?.settings?.expires_at,
+      oauthKeys: connectionSettings?.settings?.oauth ? Object.keys(connectionSettings.settings.oauth) : [],
+      credentialsKeys: connectionSettings?.settings?.oauth?.credentials ? Object.keys(connectionSettings.settings.oauth.credentials) : []
+    }, null, 2));
+    
+    // Prefer oauth credentials token as it may be more up-to-date
+    const accessToken = oauthToken || directToken;
 
     if (!accessToken) {
       console.error('No access token in Gmail connection settings');
       throw new Error('Gmail access token not available');
     }
     
-    console.log('Gmail access token obtained successfully');
+    console.log('Gmail access token obtained successfully (token length:', accessToken?.length, ')');
     return accessToken;
   } catch (error) {
     console.error('Error fetching Gmail connection:', error);
@@ -70,7 +84,43 @@ async function getAccessToken(forceRefresh = false) {
 }
 
 async function getGmailClient(forceRefresh = false) {
-  const accessToken = await getAccessToken(forceRefresh);
+  // Always fetch fresh connection to avoid stale tokens
+  const hostname = process.env.REPLIT_CONNECTORS_HOSTNAME;
+  const xReplitToken = process.env.REPL_IDENTITY 
+    ? 'repl ' + process.env.REPL_IDENTITY 
+    : process.env.WEB_REPL_RENEWAL 
+    ? 'depl ' + process.env.WEB_REPL_RENEWAL 
+    : null;
+
+  if (!xReplitToken || !hostname) {
+    throw new Error('Gmail connector environment not configured');
+  }
+
+  console.log('Fetching fresh Gmail connection...');
+  const response = await fetch(
+    'https://' + hostname + '/api/v2/connection?include_secrets=true&connector_names=google-mail',
+    {
+      headers: {
+        'Accept': 'application/json',
+        'X_REPLIT_TOKEN': xReplitToken
+      }
+    }
+  );
+  const data = await response.json();
+  const connection = data.items?.[0];
+
+  if (!connection?.settings) {
+    throw new Error('Gmail not connected');
+  }
+
+  // Try direct access_token first, then oauth credentials
+  const accessToken = connection.settings.access_token || connection.settings.oauth?.credentials?.access_token;
+  
+  if (!accessToken) {
+    throw new Error('Gmail access token not available');
+  }
+
+  console.log('Using access token (length:', accessToken.length, ')');
 
   const oauth2Client = new google.auth.OAuth2();
   oauth2Client.setCredentials({
