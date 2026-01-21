@@ -1,21 +1,9 @@
 // Gmail integration for sending submission confirmation emails
 import { google } from 'googleapis';
 
-let connectionSettings: any;
-
-async function getAccessToken(forceRefresh = false) {
-  if (!forceRefresh && connectionSettings && connectionSettings.settings?.expires_at && new Date(connectionSettings.settings.expires_at).getTime() > Date.now()) {
-    console.log('Using cached Gmail access token');
-    return connectionSettings.settings.access_token;
-  }
-  
-  if (forceRefresh) {
-    console.log('Forcing Gmail token refresh...');
-    connectionSettings = null;
-  }
-  
+// Never cache - always fetch fresh token from connector
+async function getAccessToken() {
   const hostname = process.env.REPLIT_CONNECTORS_HOSTNAME;
-  console.log('REPLIT_CONNECTORS_HOSTNAME:', hostname ? 'present' : 'missing');
   
   const xReplitToken = process.env.REPL_IDENTITY 
     ? 'repl ' + process.env.REPL_IDENTITY 
@@ -23,117 +11,45 @@ async function getAccessToken(forceRefresh = false) {
     ? 'depl ' + process.env.WEB_REPL_RENEWAL 
     : null;
 
-  console.log('Token type:', process.env.REPL_IDENTITY ? 'REPL_IDENTITY' : process.env.WEB_REPL_RENEWAL ? 'WEB_REPL_RENEWAL' : 'none');
-
   if (!xReplitToken) {
-    console.error('No X_REPLIT_TOKEN found - Gmail emails cannot be sent');
     throw new Error('X_REPLIT_TOKEN not found for repl/depl');
   }
 
   if (!hostname) {
-    console.error('REPLIT_CONNECTORS_HOSTNAME not set');
     throw new Error('Gmail connector hostname not configured');
   }
 
-  try {
-    const response = await fetch(
-      'https://' + hostname + '/api/v2/connection?include_secrets=true&connector_names=google-mail',
-      {
-        headers: {
-          'Accept': 'application/json',
-          'X_REPLIT_TOKEN': xReplitToken
-        }
-      }
-    );
-    
-    const data = await response.json();
-    connectionSettings = data.items?.[0];
-    
-    if (!connectionSettings) {
-      console.error('No Gmail connection found in connector response');
-      throw new Error('Gmail not connected - please set up Gmail integration');
-    }
-
-    const oauthToken = connectionSettings?.settings?.oauth?.credentials?.access_token;
-    const directToken = connectionSettings?.settings?.access_token;
-    
-    console.log('Token analysis:', JSON.stringify({
-      directTokenLength: directToken?.length,
-      oauthTokenLength: oauthToken?.length,
-      tokensMatch: directToken === oauthToken,
-      oauthExpiresAt: connectionSettings?.settings?.oauth?.credentials?.expiry_date,
-      settingsExpiresAt: connectionSettings?.settings?.expires_at,
-      oauthKeys: connectionSettings?.settings?.oauth ? Object.keys(connectionSettings.settings.oauth) : [],
-      credentialsKeys: connectionSettings?.settings?.oauth?.credentials ? Object.keys(connectionSettings.settings.oauth.credentials) : []
-    }, null, 2));
-    
-    // Prefer oauth credentials token as it may be more up-to-date
-    const accessToken = oauthToken || directToken;
-
-    if (!accessToken) {
-      console.error('No access token in Gmail connection settings');
-      throw new Error('Gmail access token not available');
-    }
-    
-    console.log('Gmail access token obtained successfully (token length:', accessToken?.length, ')');
-    return accessToken;
-  } catch (error) {
-    console.error('Error fetching Gmail connection:', error);
-    throw error;
-  }
-}
-
-async function getGmailClient(forceRefresh = false) {
-  // Always fetch fresh connection to avoid stale tokens
-  const hostname = process.env.REPLIT_CONNECTORS_HOSTNAME;
-  const xReplitToken = process.env.REPL_IDENTITY 
-    ? 'repl ' + process.env.REPL_IDENTITY 
-    : process.env.WEB_REPL_RENEWAL 
-    ? 'depl ' + process.env.WEB_REPL_RENEWAL 
-    : null;
-
-  if (!xReplitToken || !hostname) {
-    throw new Error('Gmail connector environment not configured');
-  }
-
-  console.log('Fetching fresh Gmail connection...');
   const response = await fetch(
     'https://' + hostname + '/api/v2/connection?include_secrets=true&connector_names=google-mail',
     {
       headers: {
         'Accept': 'application/json',
-        'X_REPLIT_TOKEN': xReplitToken,
-        'Cache-Control': 'no-cache'
+        'X_REPLIT_TOKEN': xReplitToken
       }
     }
   );
+  
   const data = await response.json();
-  const connection = data.items?.[0];
-
-  if (!connection?.settings) {
-    console.error('No connection found, raw response:', JSON.stringify(data, null, 2));
-    throw new Error('Gmail not connected');
+  const connectionSettings = data.items?.[0];
+  
+  if (!connectionSettings) {
+    throw new Error('Gmail not connected - please set up Gmail integration');
   }
 
-  // Log all available settings to debug
-  const creds = connection.settings.oauth?.credentials;
-  console.log('Connection debug:', {
-    hasDirectToken: !!connection.settings.access_token,
-    hasOauthCreds: !!creds,
-    expiresAt: creds?.expires_at,
-    expiresIn: creds?.expires_in,
-    tokenFirstChars: creds?.access_token?.substring(0, 10),
-    currentTime: new Date().toISOString()
-  });
+  const accessToken = connectionSettings?.settings?.access_token || 
+                      connectionSettings?.settings?.oauth?.credentials?.access_token;
 
-  // Try direct access_token first, then oauth credentials
-  const accessToken = connection.settings.access_token || creds?.access_token;
-  
   if (!accessToken) {
     throw new Error('Gmail access token not available');
   }
+  
+  console.log('Gmail token obtained (length:', accessToken.length, ')');
+  return accessToken;
+}
 
-  console.log('Using access token (length:', accessToken.length, ')');
+// WARNING: Never cache this client. Access tokens expire, so always call this function.
+async function getGmailClient() {
+  const accessToken = await getAccessToken();
 
   const oauth2Client = new google.auth.OAuth2();
   oauth2Client.setCredentials({
@@ -296,9 +212,9 @@ export async function sendOtpEmail(
 
   const encodedMessage = createEmailMessage(studentEmail, subject, body);
 
-  async function trySendEmail(forceRefresh: boolean): Promise<void> {
-    console.log(`Attempting to send OTP to ${studentEmail}... (forceRefresh: ${forceRefresh})`);
-    const gmail = await getGmailClient(forceRefresh);
+  async function trySendEmail(): Promise<void> {
+    console.log(`Attempting to send OTP to ${studentEmail}...`);
+    const gmail = await getGmailClient();
     console.log('Gmail client obtained successfully');
     
     await gmail.users.messages.send({
@@ -310,7 +226,7 @@ export async function sendOtpEmail(
   }
 
   try {
-    await trySendEmail(false);
+    await trySendEmail();
     console.log(`OTP email sent to ${studentEmail}`);
     return true;
   } catch (error: any) {
@@ -323,13 +239,13 @@ export async function sendOtpEmail(
     });
     
     if (error?.status === 401 || error?.code === 401 || error?.message?.includes('401')) {
-      console.log('Got 401 error, retrying with token refresh...');
+      console.log('Got 401 error, retrying...');
       try {
-        await trySendEmail(true);
-        console.log(`OTP email sent to ${studentEmail} (after token refresh)`);
+        await trySendEmail();
+        console.log(`OTP email sent to ${studentEmail} (after retry)`);
         return true;
       } catch (retryError: any) {
-        console.error('Failed to send OTP email after token refresh:', {
+        console.error('Failed to send OTP email after retry:', {
           message: retryError?.message,
           status: retryError?.status,
           code: retryError?.code,
@@ -429,9 +345,9 @@ export async function sendEvaluationEmail(
 
   const encodedMessage = createEmailMessage(studentEmail, subject, body);
 
-  async function trySendEmail(forceRefresh: boolean): Promise<void> {
-    console.log(`Attempting to send evaluation email to ${studentEmail}... (forceRefresh: ${forceRefresh})`);
-    const gmail = await getGmailClient(forceRefresh);
+  async function trySendEmail(): Promise<void> {
+    console.log(`Attempting to send evaluation email to ${studentEmail}...`);
+    const gmail = await getGmailClient();
     
     await gmail.users.messages.send({
       userId: 'me',
@@ -442,18 +358,18 @@ export async function sendEvaluationEmail(
   }
 
   try {
-    await trySendEmail(false);
+    await trySendEmail();
     console.log(`Evaluation email sent to ${studentEmail} for assignment: ${assignmentTitle}`);
     return true;
   } catch (error: any) {
     if (error?.status === 401 || error?.code === 401) {
-      console.log('Got 401 error, retrying with token refresh...');
+      console.log('Got 401 error, retrying...');
       try {
-        await trySendEmail(true);
-        console.log(`Evaluation email sent to ${studentEmail} (after token refresh)`);
+        await trySendEmail();
+        console.log(`Evaluation email sent to ${studentEmail} (after retry)`);
         return true;
       } catch (retryError) {
-        console.error('Failed to send evaluation email after token refresh:', retryError);
+        console.error('Failed to send evaluation email after retry:', retryError);
         return false;
       }
     }
