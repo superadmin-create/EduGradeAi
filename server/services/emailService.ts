@@ -249,14 +249,27 @@ export async function sendOtpEmail(
     console.log(`OTP email sent to ${studentEmail}`);
     return true;
   } catch (error: any) {
-    if (error?.status === 401 || error?.code === 401) {
+    console.error('OTP email error details:', {
+      message: error?.message,
+      status: error?.status,
+      code: error?.code,
+      errors: error?.errors,
+      response: error?.response?.data
+    });
+    
+    if (error?.status === 401 || error?.code === 401 || error?.message?.includes('401')) {
       console.log('Got 401 error, retrying with token refresh...');
       try {
         await trySendEmail(true);
         console.log(`OTP email sent to ${studentEmail} (after token refresh)`);
         return true;
-      } catch (retryError) {
-        console.error('Failed to send OTP email after token refresh:', retryError);
+      } catch (retryError: any) {
+        console.error('Failed to send OTP email after token refresh:', {
+          message: retryError?.message,
+          status: retryError?.status,
+          code: retryError?.code,
+          errors: retryError?.errors
+        });
         return false;
       }
     }
