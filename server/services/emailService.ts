@@ -144,13 +144,15 @@ async function getGmailClient(forceRefresh = false) {
 }
 
 function createEmailMessage(to: string, subject: string, body: string): string {
+  // Note: Gmail API will automatically set the From header to the authenticated user's email
   const message = [
     `To: ${to}`,
     `Subject: ${subject}`,
+    'MIME-Version: 1.0',
     'Content-Type: text/html; charset=utf-8',
     '',
     body
-  ].join('\n');
+  ].join('\r\n');
   
   return Buffer.from(message).toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 }
