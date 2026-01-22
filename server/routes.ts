@@ -177,6 +177,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
     });
   });
 
+  // Database backup download (temporary)
+  app.get("/api/download/database-backup", async (req, res) => {
+    const fs = await import('fs');
+    const path = await import('path');
+    const filePath = path.join(process.cwd(), 'database_backup.sql');
+    if (fs.existsSync(filePath)) {
+      res.download(filePath, 'database_backup.sql');
+    } else {
+      res.status(404).json({ message: "Backup file not found" });
+    }
+  });
+
   // Assignment routes
   app.get("/api/assignments", requireAuth, async (req, res) => {
     try {
