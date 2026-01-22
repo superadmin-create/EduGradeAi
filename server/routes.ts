@@ -177,15 +177,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
     });
   });
 
-  // Database backup download (temporary)
+  // Database backup download - generates fresh SQL dump
   app.get("/api/download/database-backup", async (req, res) => {
-    const fs = await import('fs');
-    const path = await import('path');
-    const filePath = path.join(process.cwd(), 'database_backup.sql');
-    if (fs.existsSync(filePath)) {
-      res.download(filePath, 'database_backup.sql');
-    } else {
-      res.status(404).json({ message: "Backup file not found" });
+    try {
+      const { exec } = await import('child_process');
+      const { promisify } = await import('util');
+      const execAsync = promisify(exec);
+      
+      const { stdout } = await execAsync('pg_dump "$DATABASE_URL" --no-owner --no-acl');
+      
+      res.setHeader('Content-Type', 'application/sql');
+      res.setHeader('Content-Disposition', 'attachment; filename="database_backup.sql"');
+      res.send(stdout);
+    } catch (error) {
+      console.error('Database backup error:', error);
+      res.status(500).json({ message: "Failed to generate backup" });
     }
   });
 
