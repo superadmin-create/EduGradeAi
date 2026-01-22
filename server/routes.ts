@@ -177,18 +177,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
     });
   });
 
-  // Database backup download - generates fresh SQL dump
+  // Database backup download - streams SQL dump directly
   app.get("/api/download/database-backup", async (req, res) => {
     try {
-      const { exec } = await import('child_process');
-      const { promisify } = await import('util');
-      const execAsync = promisify(exec);
-      
-      const { stdout } = await execAsync('pg_dump "$DATABASE_URL" --no-owner --no-acl');
+      const { spawn } = await import('child_process');
       
       res.setHeader('Content-Type', 'application/sql');
       res.setHeader('Content-Disposition', 'attachment; filename="database_backup.sql"');
-      res.send(stdout);
+      
+      const pgDump = spawn('pg_dump', ['--no-owner', '--no-acl'], {
+        env: { ...process.env, PGCONNECT_TIMEOUT: '30' }
+      });
+      
+      pgDump.stdout.pipe(res);
+      pgDump.stderr.on('data', (data) => console.error('pg_dump error:', data.toString()));
+      pgDump.on('error', (err) => {
+        console.error('Spawn error:', err);
+        if (!res.headersSent) res.status(500).json({ message: "Backup failed" });
+      });
     } catch (error) {
       console.error('Database backup error:', error);
       res.status(500).json({ message: "Failed to generate backup" });
