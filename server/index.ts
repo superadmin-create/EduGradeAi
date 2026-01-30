@@ -3,6 +3,9 @@ import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { startBackgroundProcessor } from "./services/backgroundProcessor";
 
+console.log(`[startup] NODE_ENV: ${process.env.NODE_ENV}`);
+console.log(`[startup] Starting server...`);
+
 const app = express();
 
 // Health check endpoints - must be before any middleware that might block
@@ -18,6 +21,11 @@ app.get("/", (req, res, next) => {
 
 app.get("/health", (_req, res) => {
   res.status(200).json({ status: "ok", timestamp: new Date().toISOString() });
+});
+
+// Simple test endpoint that should always work
+app.get("/ping", (_req, res) => {
+  res.status(200).send("pong");
 });
 
 app.use(express.json());
@@ -67,9 +75,12 @@ app.use((req, res, next) => {
   // importantly only setup vite in development and after
   // setting up all the other routes so the catch-all route
   // doesn't interfere with the other routes
+  console.log(`[startup] Express env: ${app.get("env")}`);
   if (app.get("env") === "development") {
+    console.log(`[startup] Using Vite development server`);
     await setupVite(app, server);
   } else {
+    console.log(`[startup] Using static file serving for production`);
     serveStatic(app);
   }
 
