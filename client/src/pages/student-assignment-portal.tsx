@@ -162,6 +162,21 @@ export default function StudentAssignmentPortal() {
     onDrop: (acceptedFiles) => {
       if (acceptedFiles.length > 0) {
         setFile(acceptedFiles[0]);
+        toast({
+          title: "File Selected",
+          description: `${acceptedFiles[0].name} is ready to upload.`,
+        });
+      }
+    },
+    onDropRejected: (fileRejections) => {
+      const rejection = fileRejections[0];
+      if (rejection) {
+        const errors = rejection.errors.map(e => e.message).join(", ");
+        toast({
+          title: "File Rejected",
+          description: `${rejection.file.name}: ${errors}`,
+          variant: "destructive",
+        });
       }
     },
     accept: {
