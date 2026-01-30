@@ -125,22 +125,45 @@ export default function StudentAssignmentPortal() {
 
   const submitMutation = useMutation({
     mutationFn: async (formData: FormData) => {
-      try {
-        const res = await fetch(`/api/public/${collegeCode}/assignments/${assignmentSlug}/submit`, {
-          method: "POST",
-          body: formData,
-        });
-        if (!res.ok) {
-          const error = await res.json();
-          throw new Error(error.message || "Submission failed");
+      const maxRetries = 3;
+      let lastError: Error | null = null;
+      
+      for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        try {
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 60000);
+          
+          const res = await fetch(`/api/public/${collegeCode}/assignments/${assignmentSlug}/submit`, {
+            method: "POST",
+            body: formData,
+            signal: controller.signal,
+          });
+          
+          clearTimeout(timeoutId);
+          
+          if (!res.ok) {
+            const error = await res.json();
+            throw new Error(error.message || "Submission failed");
+          }
+          return res.json();
+        } catch (error) {
+          lastError = error as Error;
+          
+          if (error instanceof Error && error.name === "AbortError") {
+            lastError = new Error("Upload timed out. Please try again.");
+          } else if (error instanceof TypeError && error.message === "Failed to fetch") {
+            lastError = new Error("Network connection lost. Please check your internet and try again.");
+          }
+          
+          if (attempt < maxRetries) {
+            const delay = Math.min(1000 * Math.pow(2, attempt - 1), 5000);
+            await new Promise(resolve => setTimeout(resolve, delay));
+            continue;
+          }
         }
-        return res.json();
-      } catch (error) {
-        if (error instanceof TypeError && error.message === "Failed to fetch") {
-          throw new Error("Network connection lost. Please check your internet and try again.");
-        }
-        throw error;
       }
+      
+      throw lastError || new Error("Submission failed after multiple attempts");
     },
     onSuccess: () => {
       setIsSubmitted(true);
@@ -152,7 +175,7 @@ export default function StudentAssignmentPortal() {
     onError: (error: Error) => {
       toast({
         title: "Submission Failed",
-        description: error.message,
+        description: error.message + " Please try again.",
         variant: "destructive",
       });
     },
