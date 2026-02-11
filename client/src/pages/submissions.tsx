@@ -169,49 +169,16 @@ export default function Submissions() {
     queryKey: ["/api/assignments"],
   });
 
-  // Fetch submissions for the selected assignment
-  const { data: submissions = [], isLoading: submissionsLoading } = useQuery({
-    queryKey: ["/api/assignments", selectedAssignment, "submissions"],
-    queryFn: async () => {
-      if (selectedAssignment === "all") {
-        // Fetch submissions for all assignments
-        const allSubmissions = [];
-        if (assignments) {
-          for (const assignment of assignments) {
-            const response = await fetch(`/api/assignments/${assignment.id}/submissions`, {
-              credentials: "include",
-            });
-            if (response.ok) {
-              const assignmentSubmissions = await response.json();
-              // Add assignment info to each submission
-              assignmentSubmissions.forEach((sub: any) => {
-                sub.assignmentTitle = assignment.title;
-              });
-              allSubmissions.push(...assignmentSubmissions);
-            }
-          }
-        }
-        return allSubmissions;
-      } else {
-        // Fetch submissions for specific assignment
-        const response = await fetch(`/api/assignments/${selectedAssignment}/submissions`, {
-          credentials: "include",
-        });
-        if (response.ok) {
-          const assignmentSubmissions = await response.json();
-          const assignment = assignments?.find(a => a.id === selectedAssignment);
-          if (assignment) {
-            assignmentSubmissions.forEach((sub: any) => {
-              sub.assignmentTitle = assignment.title;
-            });
-          }
-          return assignmentSubmissions;
-        }
-        return [];
-      }
-    },
-    enabled: !!assignments,
+  // Fetch all submissions in one fast query
+  const { data: allSubmissions = [], isLoading: submissionsLoading } = useQuery({
+    queryKey: ["/api/submissions/all"],
+    refetchInterval: 15000,
   });
+
+  // Filter by selected assignment on the client side
+  const submissions = selectedAssignment === "all" 
+    ? allSubmissions 
+    : allSubmissions.filter((sub: Submission) => sub.assignmentId === selectedAssignment);
 
   // Filter submissions based on search query and date filter
   const filteredSubmissions = submissions?.filter((submission: Submission) => {
@@ -220,9 +187,10 @@ export default function Submissions() {
       submission.studentId.toLowerCase().includes(searchQuery.toLowerCase()) ||
       (submission.assignmentTitle && submission.assignmentTitle.toLowerCase().includes(searchQuery.toLowerCase()));
     
-    // Date filter
+    // Date filter - use local timezone for comparison
     if (appliedDateFilter) {
-      const submissionDate = new Date(submission.submittedAt).toISOString().split('T')[0];
+      const subDate = new Date(submission.submittedAt);
+      const submissionDate = `${subDate.getFullYear()}-${String(subDate.getMonth() + 1).padStart(2, '0')}-${String(subDate.getDate()).padStart(2, '0')}`;
       const filterDate = format(appliedDateFilter, "yyyy-MM-dd");
       return matchesSearch && submissionDate === filterDate;
     }

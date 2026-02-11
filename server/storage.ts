@@ -1,6 +1,6 @@
 import { type User, type InsertUser, type Assignment, type InsertAssignment, type Submission, type InsertSubmission, type GradingResult, type InsertGradingResult, type College, type InsertCollege, type PlagiarismResult, type InsertPlagiarismResult, type OtpRequest, type InsertOtpRequest, users, assignments, submissions, gradingResults, colleges, plagiarismResults, otpRequests } from "@shared/schema";
 import { db } from "./db";
-import { eq, and, sql, or, like, lt, gt } from "drizzle-orm";
+import { eq, and, sql, or, like, lt, gt, inArray } from "drizzle-orm";
 
 export interface IStorage {
   getCollege(id: string): Promise<College | undefined>;
@@ -24,6 +24,7 @@ export interface IStorage {
 
   getSubmission(id: string): Promise<Submission | undefined>;
   getSubmissions(assignmentId: string): Promise<Submission[]>;
+  getAllSubmissionsByCollege(collegeId: string): Promise<any[]>;
   getSubmissionsByStudent(studentId: string): Promise<Submission[]>;
   createSubmission(submission: InsertSubmission): Promise<Submission>;
   updateSubmission(id: string, submission: Partial<Submission>): Promise<Submission | undefined>;
@@ -198,6 +199,25 @@ export class DatabaseStorage implements IStorage {
 
   async getSubmissions(assignmentId: string): Promise<Submission[]> {
     return db.select().from(submissions).where(eq(submissions.assignmentId, assignmentId));
+  }
+
+  async getAllSubmissionsByCollege(collegeId: string): Promise<any[]> {
+    const collegeAssignments = await this.getAssignmentsByCollege(collegeId);
+    if (collegeAssignments.length === 0) return [];
+    const assignmentIds = collegeAssignments.map(a => a.id);
+    const allSubs = await db.select({
+      id: submissions.id,
+      assignmentId: submissions.assignmentId,
+      studentName: submissions.studentName,
+      studentId: submissions.studentId,
+      studentEmail: submissions.studentEmail,
+      fileName: submissions.fileName,
+      submittedAt: submissions.submittedAt,
+      isGraded: submissions.isGraded,
+    }).from(submissions).where(
+      inArray(submissions.assignmentId, assignmentIds)
+    );
+    return allSubs;
   }
 
   async getSubmissionsByStudent(studentId: string): Promise<Submission[]> {

@@ -285,6 +285,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Get all submissions for the logged-in college
+  app.get("/api/submissions/all", requireAuth, async (req, res) => {
+    try {
+      const collegeId = req.session.collegeId!;
+      const allSubmissions = await storage.getAllSubmissionsByCollege(collegeId);
+      const collegeAssignments = await storage.getAssignmentsByCollege(collegeId);
+      const assignmentMap = new Map(collegeAssignments.map(a => [a.id, a.title]));
+      const enriched = allSubmissions.map(sub => ({
+        ...sub,
+        assignmentTitle: assignmentMap.get(sub.assignmentId) || "Unknown",
+      }));
+      res.json(enriched);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch submissions" });
+    }
+  });
+
   // Submission routes
   app.get("/api/assignments/:id/submissions", requireAuth, async (req, res) => {
     try {
