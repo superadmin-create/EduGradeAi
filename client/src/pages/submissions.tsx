@@ -185,6 +185,7 @@ export default function Submissions() {
     // Text search filter
     const matchesSearch = submission.studentName.toLowerCase().includes(searchQuery.toLowerCase()) ||
       submission.studentId.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (submission.studentEmail && submission.studentEmail.toLowerCase().includes(searchQuery.toLowerCase())) ||
       (submission.assignmentTitle && submission.assignmentTitle.toLowerCase().includes(searchQuery.toLowerCase()));
     
     // Date filter - use local timezone for comparison

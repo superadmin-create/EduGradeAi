@@ -12,6 +12,7 @@ import Submissions from "@/pages/submissions";
 import UploadPage from "@/pages/upload";
 import GradingResults from "@/pages/grading-results";
 import Settings from "@/pages/settings";
+import SearchPage from "@/pages/search";
 import Login from "@/pages/login";
 import StudentPortal from "@/pages/student-portal";
 import StudentAssignmentPortal from "@/pages/student-assignment-portal";
@@ -31,6 +32,7 @@ function AuthenticatedRouter() {
             <Route path="/upload" component={UploadPage} />
             <Route path="/grading-results" component={GradingResults} />
             <Route path="/settings" component={Settings} />
+            <Route path="/search" component={SearchPage} />
             <Route component={NotFound} />
           </Switch>
         </main>

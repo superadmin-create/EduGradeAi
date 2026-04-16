@@ -7,7 +7,8 @@ import {
   FileText, 
   Users, 
   BarChart3, 
-  Settings 
+  Settings,
+  Search
 } from "lucide-react";
 
 const navigationItems = [
@@ -15,6 +16,7 @@ const navigationItems = [
   { href: "/assignments", label: "Assignments", icon: FileText },
   { href: "/upload", label: "Upload Submission", icon: Upload },
   { href: "/submissions", label: "Student Submissions", icon: Users },
+  { href: "/search", label: "Search Students", icon: Search },
   { href: "/grading-results", label: "Grading Results", icon: BarChart3 },
   { href: "/settings", label: "Settings", icon: Settings },
 ];

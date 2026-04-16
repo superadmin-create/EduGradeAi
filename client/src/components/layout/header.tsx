@@ -25,6 +25,10 @@ const pageConfig = {
   "/grading-results": {
     title: "Grading Results",
     subtitle: "Review AI grading results and analytics"
+  },
+  "/search": {
+    title: "Search Students",
+    subtitle: "Find students by name, roll number, or email"
   }
 };
 
