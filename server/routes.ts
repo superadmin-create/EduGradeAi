@@ -964,6 +964,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { email, assignmentId } = parsed.data;
       const normalizedEmail = email.toLowerCase().trim();
 
+      // If this OTP is for a specific assignment, check allowed emails list
+      if (assignmentId) {
+        const assignment = await storage.getAssignment(assignmentId);
+        if (assignment && assignment.allowedEmails && assignment.allowedEmails.length > 0) {
+          const allowed = assignment.allowedEmails.map((e: string) => e.toLowerCase().trim());
+          if (!allowed.includes(normalizedEmail)) {
+            return res.status(403).json({ message: "This email address is not allowed to submit this assignment. Please contact your instructor." });
+          }
+        }
+      }
+
       // Generate 6-digit OTP
       const otp = crypto.randomInt(100000, 999999).toString();
       
@@ -1085,6 +1096,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Use the verified email from OTP request
       const verifiedEmail = otpRequest.email;
+
+      // Check allowed emails list on the assignment
+      if (assignment.allowedEmails && assignment.allowedEmails.length > 0) {
+        const allowed = assignment.allowedEmails.map((e: string) => e.toLowerCase().trim());
+        if (!allowed.includes(verifiedEmail.toLowerCase())) {
+          return res.status(403).json({ message: "This email address is not allowed to submit this assignment. Please contact your instructor." });
+        }
+      }
 
       // Validate file exists
       if (!req.file && !req.body.content) {
