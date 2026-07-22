@@ -1089,11 +1089,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const normalizedEmail = studentEmail.toLowerCase().trim();
 
       // Check allowed emails list on the assignment
+      console.log(`[EMAIL CHECK] assignment.allowedEmails =`, JSON.stringify(assignment.allowedEmails));
+      console.log(`[EMAIL CHECK] studentEmail raw = "${studentEmail}", normalized = "${normalizedEmail}"`);
       if (assignment.allowedEmails && assignment.allowedEmails.length > 0) {
         const allowed = assignment.allowedEmails.map((e: string) => e.toLowerCase().trim());
-        if (!allowed.includes(normalizedEmail)) {
+        const isAllowed = allowed.includes(normalizedEmail);
+        console.log(`[EMAIL CHECK] allowed list length=${allowed.length}, isAllowed=${isAllowed}`);
+        if (!isAllowed) {
           return res.status(403).json({ message: "This email address is not allowed to submit this assignment. Please contact your instructor." });
         }
+      } else {
+        console.log(`[EMAIL CHECK] No restriction on this assignment — all emails allowed`);
       }
 
       // Validate file exists
