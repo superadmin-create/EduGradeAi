@@ -163,6 +163,7 @@ export class DatabaseStorage implements IStorage {
       maxPoints: insertAssignment.maxPoints,
       dueDate: null,
       userId: insertAssignment.userId,
+      allowedEmails: insertAssignment.allowedEmails || null,
     }).returning();
     return assignment;
   }
