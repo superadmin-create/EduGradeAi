@@ -7,8 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { useDropzone } from "react-dropzone";
-import { Upload, FileText, CheckCircle, GraduationCap, BookOpen, Calendar, Award, Mail, Shield, ArrowLeft } from "lucide-react";
-import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
+import { Upload, FileText, CheckCircle, GraduationCap, BookOpen, Calendar, Award, Mail, ArrowRight } from "lucide-react";
 
 interface PublicAssignment {
   id: string;
@@ -25,21 +24,18 @@ interface CollegeInfo {
   code: string;
 }
 
-type VerificationStep = "email" | "otp" | "submission";
+type Step = "email" | "submission";
 
 export default function StudentAssignmentPortal() {
   const params = useParams();
   const collegeCode = params.collegeCode as string;
   const assignmentSlug = params.assignmentSlug as string;
   const { toast } = useToast();
-  
-  const [step, setStep] = useState<VerificationStep>("email");
+
+  const [step, setStep] = useState<Step>("email");
   const [studentName, setStudentName] = useState("");
   const [studentId, setStudentId] = useState("");
   const [studentEmail, setStudentEmail] = useState("");
-  const [otpCode, setOtpCode] = useState("");
-  const [otpRequestId, setOtpRequestId] = useState<string | null>(null);
-  const [verifiedEmail, setVerifiedEmail] = useState<string | null>(null);
   const [file, setFile] = useState<File | null>(null);
   const [isSubmitted, setIsSubmitted] = useState(false);
 
@@ -63,84 +59,24 @@ export default function StudentAssignmentPortal() {
     enabled: !!college && !!assignmentSlug,
   });
 
-  const requestOtpMutation = useMutation({
-    mutationFn: async (email: string) => {
-      const res = await fetch(`/api/public/${collegeCode}/otp/request`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, assignmentId: assignment?.id }),
-      });
-      if (!res.ok) {
-        const error = await res.json();
-        throw new Error(error.message || "Failed to send verification code");
-      }
-      return res.json();
-    },
-    onSuccess: (data) => {
-      setOtpRequestId(data.requestId);
-      setStep("otp");
-      toast({
-        title: "Verification Code Sent",
-        description: "Please check your email for the 6-digit code.",
-      });
-    },
-    onError: (error: Error) => {
-      toast({
-        title: "Error",
-        description: error.message,
-        variant: "destructive",
-      });
-    },
-  });
-
-  const verifyOtpMutation = useMutation({
-    mutationFn: async ({ requestId, otp }: { requestId: string; otp: string }) => {
-      const res = await fetch(`/api/public/${collegeCode}/otp/verify`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ requestId, otp }),
-      });
-      if (!res.ok) {
-        const error = await res.json();
-        throw new Error(error.message || "Verification failed");
-      }
-      return res.json();
-    },
-    onSuccess: (data) => {
-      setVerifiedEmail(data.email);
-      setStep("submission");
-      toast({
-        title: "Email Verified",
-        description: "You can now submit your assignment.",
-      });
-    },
-    onError: (error: Error) => {
-      toast({
-        title: "Verification Failed",
-        description: error.message,
-        variant: "destructive",
-      });
-    },
-  });
-
   const submitMutation = useMutation({
     mutationFn: async (formData: FormData) => {
       const maxRetries = 3;
       let lastError: Error | null = null;
-      
+
       for (let attempt = 1; attempt <= maxRetries; attempt++) {
         try {
           const controller = new AbortController();
           const timeoutId = setTimeout(() => controller.abort(), 60000);
-          
+
           const res = await fetch(`/api/public/${collegeCode}/assignments/${assignmentSlug}/submit`, {
             method: "POST",
             body: formData,
             signal: controller.signal,
           });
-          
+
           clearTimeout(timeoutId);
-          
+
           if (!res.ok) {
             const error = await res.json();
             throw new Error(error.message || "Submission failed");
@@ -148,13 +84,16 @@ export default function StudentAssignmentPortal() {
           return res.json();
         } catch (error) {
           lastError = error as Error;
-          
+
           if (error instanceof Error && error.name === "AbortError") {
             lastError = new Error("Upload timed out. Please try again.");
           } else if (error instanceof TypeError && error.message === "Failed to fetch") {
             lastError = new Error("Network connection lost. Please check your internet and try again.");
+          } else if (lastError?.message && !lastError.message.includes("timed out") && !lastError.message.includes("Network")) {
+            // Don't retry non-network errors (e.g. 403 not allowed)
+            throw lastError;
           }
-          
+
           if (attempt < maxRetries) {
             const delay = Math.min(1000 * Math.pow(2, attempt - 1), 5000);
             await new Promise(resolve => setTimeout(resolve, delay));
@@ -162,7 +101,7 @@ export default function StudentAssignmentPortal() {
           }
         }
       }
-      
+
       throw lastError || new Error("Submission failed after multiple attempts");
     },
     onSuccess: () => {
@@ -175,7 +114,7 @@ export default function StudentAssignmentPortal() {
     onError: (error: Error) => {
       toast({
         title: "Submission Failed",
-        description: error.message + " Please try again.",
+        description: error.message,
         variant: "destructive",
       });
     },
@@ -220,7 +159,7 @@ export default function StudentAssignmentPortal() {
     maxSize: 10 * 1024 * 1024,
   });
 
-  const handleRequestOtp = (e: React.FormEvent) => {
+  const handleEmailContinue = (e: React.FormEvent) => {
     e.preventDefault();
     if (!studentEmail) {
       toast({
@@ -230,26 +169,13 @@ export default function StudentAssignmentPortal() {
       });
       return;
     }
-    requestOtpMutation.mutate(studentEmail);
-  };
-
-  const handleVerifyOtp = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!otpRequestId || !otpCode || otpCode.length !== 6) {
-      toast({
-        title: "Invalid Code",
-        description: "Please enter the 6-digit verification code.",
-        variant: "destructive",
-      });
-      return;
-    }
-    verifyOtpMutation.mutate({ requestId: otpRequestId, otp: otpCode });
+    setStep("submission");
   };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    
-    if (!studentName || !studentId || !file || !otpRequestId) {
+
+    if (!studentName || !studentId || !file) {
       toast({
         title: "Missing Information",
         description: "Please fill in all fields and upload a file.",
@@ -261,7 +187,7 @@ export default function StudentAssignmentPortal() {
     const formData = new FormData();
     formData.append("studentName", studentName);
     formData.append("studentId", studentId);
-    formData.append("otpRequestId", otpRequestId);
+    formData.append("studentEmail", studentEmail);
     formData.append("file", file);
 
     submitMutation.mutate(formData);
@@ -271,9 +197,6 @@ export default function StudentAssignmentPortal() {
     setStudentName("");
     setStudentId("");
     setStudentEmail("");
-    setOtpCode("");
-    setOtpRequestId(null);
-    setVerifiedEmail(null);
     setFile(null);
     setIsSubmitted(false);
     setStep("email");
@@ -375,42 +298,37 @@ export default function StudentAssignmentPortal() {
           </CardContent>
         </Card>
 
+        {/* Step indicators */}
         <div className="flex items-center justify-center gap-4 mb-6">
-          <div className={`flex items-center gap-2 ${step === "email" ? "text-primary font-semibold" : verifiedEmail ? "text-green-600" : "text-gray-400"}`}>
-            <div className={`w-8 h-8 rounded-full flex items-center justify-center ${step === "email" ? "bg-primary text-white" : verifiedEmail ? "bg-green-600 text-white" : "bg-gray-200"}`}>
-              {verifiedEmail ? <CheckCircle className="h-5 w-5" /> : "1"}
+          <div className={`flex items-center gap-2 ${step === "email" ? "text-primary font-semibold" : "text-green-600"}`}>
+            <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white ${step === "email" ? "bg-primary" : "bg-green-600"}`}>
+              {step === "submission" ? <CheckCircle className="h-5 w-5" /> : "1"}
             </div>
-            <span className="hidden sm:inline">Verify Email</span>
-          </div>
-          <div className="w-12 h-0.5 bg-gray-200"></div>
-          <div className={`flex items-center gap-2 ${step === "otp" ? "text-primary font-semibold" : verifiedEmail ? "text-green-600" : "text-gray-400"}`}>
-            <div className={`w-8 h-8 rounded-full flex items-center justify-center ${step === "otp" ? "bg-primary text-white" : verifiedEmail ? "bg-green-600 text-white" : "bg-gray-200"}`}>
-              {verifiedEmail ? <CheckCircle className="h-5 w-5" /> : "2"}
-            </div>
-            <span className="hidden sm:inline">Enter Code</span>
+            <span className="hidden sm:inline">Email</span>
           </div>
           <div className="w-12 h-0.5 bg-gray-200"></div>
           <div className={`flex items-center gap-2 ${step === "submission" ? "text-primary font-semibold" : "text-gray-400"}`}>
-            <div className={`w-8 h-8 rounded-full flex items-center justify-center ${step === "submission" ? "bg-primary text-white" : "bg-gray-200"}`}>
-              3
+            <div className={`w-8 h-8 rounded-full flex items-center justify-center ${step === "submission" ? "bg-primary text-white" : "bg-gray-200 text-gray-500"}`}>
+              2
             </div>
             <span className="hidden sm:inline">Submit</span>
           </div>
         </div>
 
+        {/* Step 1: Email */}
         {step === "email" && (
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Mail className="h-5 w-5" />
-                Verify Your Email
+                Enter Your Email
               </CardTitle>
               <CardDescription>
-                We'll send a verification code to your email address to confirm your identity.
+                Provide your email address to continue to the submission form.
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <form onSubmit={handleRequestOtp} className="space-y-6">
+              <form onSubmit={handleEmailContinue} className="space-y-6">
                 <div className="space-y-2">
                   <Label htmlFor="studentEmail">Email Address</Label>
                   <Input
@@ -424,110 +342,21 @@ export default function StudentAssignmentPortal() {
                   />
                 </div>
 
-                <Button 
-                  type="submit" 
-                  className="w-full" 
-                  disabled={requestOtpMutation.isPending || !studentEmail}
-                  data-testid="button-send-code"
+                <Button
+                  type="submit"
+                  className="w-full"
+                  disabled={!studentEmail}
+                  data-testid="button-continue"
                 >
-                  {requestOtpMutation.isPending ? (
-                    <>
-                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                      Sending Code...
-                    </>
-                  ) : (
-                    <>
-                      <Mail className="h-4 w-4 mr-2" />
-                      Send Verification Code
-                    </>
-                  )}
+                  <ArrowRight className="h-4 w-4 mr-2" />
+                  Continue
                 </Button>
               </form>
             </CardContent>
           </Card>
         )}
 
-        {step === "otp" && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Shield className="h-5 w-5" />
-                Enter Verification Code
-              </CardTitle>
-              <CardDescription>
-                We've sent a 6-digit code to <strong>{studentEmail}</strong>. Please enter it below.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <form onSubmit={handleVerifyOtp} className="space-y-6">
-                <div className="flex flex-col items-center space-y-4">
-                  <InputOTP 
-                    maxLength={6} 
-                    value={otpCode}
-                    onChange={(value) => setOtpCode(value)}
-                    data-testid="input-otp"
-                  >
-                    <InputOTPGroup>
-                      <InputOTPSlot index={0} />
-                      <InputOTPSlot index={1} />
-                      <InputOTPSlot index={2} />
-                      <InputOTPSlot index={3} />
-                      <InputOTPSlot index={4} />
-                      <InputOTPSlot index={5} />
-                    </InputOTPGroup>
-                  </InputOTP>
-                  <p className="text-sm text-gray-500">
-                    The code will expire in 10 minutes.
-                  </p>
-                </div>
-
-                <div className="flex gap-3">
-                  <Button 
-                    type="button" 
-                    variant="outline"
-                    onClick={() => setStep("email")}
-                    className="flex-1"
-                    data-testid="button-back-to-email"
-                  >
-                    <ArrowLeft className="h-4 w-4 mr-2" />
-                    Back
-                  </Button>
-                  <Button 
-                    type="submit" 
-                    className="flex-1" 
-                    disabled={verifyOtpMutation.isPending || otpCode.length !== 6}
-                    data-testid="button-verify-code"
-                  >
-                    {verifyOtpMutation.isPending ? (
-                      <>
-                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                        Verifying...
-                      </>
-                    ) : (
-                      <>
-                        <Shield className="h-4 w-4 mr-2" />
-                        Verify Code
-                      </>
-                    )}
-                  </Button>
-                </div>
-
-                <div className="text-center">
-                  <Button 
-                    type="button"
-                    variant="link"
-                    onClick={() => requestOtpMutation.mutate(studentEmail)}
-                    disabled={requestOtpMutation.isPending}
-                    data-testid="button-resend-code"
-                  >
-                    Didn't receive the code? Resend
-                  </Button>
-                </div>
-              </form>
-            </CardContent>
-          </Card>
-        )}
-
+        {/* Step 2: Submission form */}
         {step === "submission" && (
           <Card>
             <CardHeader>
@@ -536,7 +365,15 @@ export default function StudentAssignmentPortal() {
                 Submit Your Work
               </CardTitle>
               <CardDescription>
-                Email verified: <strong>{verifiedEmail}</strong>. Enter your details and upload your submission.
+                Submitting as <strong>{studentEmail}</strong> —{" "}
+                <button
+                  type="button"
+                  className="text-primary underline text-sm"
+                  onClick={() => setStep("email")}
+                  data-testid="button-change-email"
+                >
+                  change
+                </button>
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -590,15 +427,17 @@ export default function StudentAssignmentPortal() {
                         <p className="text-gray-600">
                           {isDragActive ? "Drop your file here" : "Drag and drop your file here, or click to browse"}
                         </p>
-                        <p className="text-sm text-gray-400 mt-1">Supported: PDF, DOC, DOCX, PPTX, XLSX, XLS, CSV, TXT, MD, PNG, JPG, GIF (max 10MB)</p>
+                        <p className="text-sm text-gray-400 mt-1">
+                          Supported: PDF, DOC, DOCX, PPTX, XLSX, XLS, CSV, TXT, MD, PNG, JPG, GIF (max 10MB)
+                        </p>
                       </div>
                     )}
                   </div>
                 </div>
 
-                <Button 
-                  type="submit" 
-                  className="w-full" 
+                <Button
+                  type="submit"
+                  className="w-full"
                   disabled={submitMutation.isPending || !studentName || !studentId || !file}
                   data-testid="button-submit"
                 >

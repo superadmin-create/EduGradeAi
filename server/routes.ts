@@ -1077,30 +1077,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Assignment not found" });
       }
 
-      // Validate student name, ID, email, and OTP verification
-      const { studentName, studentId, studentEmail, otpRequestId } = req.body;
+      // Validate student name, ID, and email
+      const { studentName, studentId, studentEmail } = req.body;
       if (!studentName || !studentId) {
         return res.status(400).json({ message: "Student name and ID are required" });
       }
-
-      // Require OTP verification
-      if (!otpRequestId) {
-        return res.status(400).json({ message: "Email verification is required. Please verify your email first." });
+      if (!studentEmail) {
+        return res.status(400).json({ message: "Email address is required" });
       }
 
-      // Validate OTP verification
-      const otpRequest = await storage.getOtpRequest(otpRequestId);
-      if (!otpRequest || otpRequest.status !== "verified") {
-        return res.status(400).json({ message: "Email not verified. Please verify your email first." });
-      }
-
-      // Use the verified email from OTP request
-      const verifiedEmail = otpRequest.email;
+      const normalizedEmail = studentEmail.toLowerCase().trim();
 
       // Check allowed emails list on the assignment
       if (assignment.allowedEmails && assignment.allowedEmails.length > 0) {
         const allowed = assignment.allowedEmails.map((e: string) => e.toLowerCase().trim());
-        if (!allowed.includes(verifiedEmail.toLowerCase())) {
+        if (!allowed.includes(normalizedEmail)) {
           return res.status(403).json({ message: "This email address is not allowed to submit this assignment. Please contact your instructor." });
         }
       }
@@ -1153,7 +1144,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         assignmentId: assignment.id,
         studentName,
         studentId,
-        studentEmail: verifiedEmail,
+        studentEmail: normalizedEmail,
         content,
         fileName,
         rawFileData,
