@@ -166,40 +166,51 @@ export async function processUploadedFile(
     } 
     // Handle PDF files
     else if (originalName.match(/\.pdf$/i) || mimeType.includes('pdf')) {
-      const loadingTask = pdfjsLib.getDocument({ data: new Uint8Array(fileBuffer) });
-      const pdfDocument = await loadingTask.promise;
-      const textParts: string[] = [];
-      let totalTextLength = 0;
-      
-      for (let pageNum = 1; pageNum <= pdfDocument.numPages; pageNum++) {
-        const page = await pdfDocument.getPage(pageNum);
-        const textContent = await page.getTextContent();
-        const pageText = textContent.items.map((item: any) => item.str).join(' ').trim();
-        textParts.push(`--- Page ${pageNum} ---\n${pageText}`);
-        totalTextLength += pageText.length;
-      }
-      
-      content = textParts.join('\n\n');
-      
-      // Check if PDF has very little text (likely scanned/image-based)
-      const averageTextPerPage = totalTextLength / pdfDocument.numPages;
-      const isImageBasedPDF = averageTextPerPage < 50; // Less than 50 chars per page on average
-      
-      console.log(`PDF processed: ${pdfDocument.numPages} pages, ${totalTextLength} total chars, avg ${averageTextPerPage.toFixed(0)} chars/page, image-based: ${isImageBasedPDF}`);
-      
-      // If image-based PDF and not in fast mode, use Vision API to extract content
-      if (isImageBasedPDF && !fastMode) {
-        console.log("Detected image-based PDF, using Vision API for full extraction...");
-        try {
-          const pdfBase64 = fileBuffer.toString('base64');
-          const visionContent = await extractTextFromPDFWithVision(pdfBase64);
-          if (visionContent && visionContent.trim().length > 50) {
-            content = visionContent;
-          }
-        } catch (visionError) {
-          console.error("Vision PDF extraction failed:", visionError);
-          // Keep the original text extraction result
+      try {
+        const loadingTask = pdfjsLib.getDocument({
+          data: new Uint8Array(fileBuffer),
+          useWorkerFetch: false,
+          isEvalSupported: false,
+          useSystemFonts: true,
+        });
+        const pdfDocument = await loadingTask.promise;
+        const textParts: string[] = [];
+        let totalTextLength = 0;
+        
+        for (let pageNum = 1; pageNum <= pdfDocument.numPages; pageNum++) {
+          const page = await pdfDocument.getPage(pageNum);
+          const textContent = await page.getTextContent();
+          const pageText = textContent.items.map((item: any) => item.str).join(' ').trim();
+          textParts.push(`--- Page ${pageNum} ---\n${pageText}`);
+          totalTextLength += pageText.length;
         }
+        
+        content = textParts.join('\n\n');
+        
+        // Check if PDF has very little text (likely scanned/image-based)
+        const averageTextPerPage = totalTextLength / pdfDocument.numPages;
+        const isImageBasedPDF = averageTextPerPage < 50;
+        
+        console.log(`PDF processed: ${pdfDocument.numPages} pages, ${totalTextLength} total chars, avg ${averageTextPerPage.toFixed(0)} chars/page, image-based: ${isImageBasedPDF}`);
+        
+        // If image-based PDF and not in fast mode, use Vision API to extract content
+        if (isImageBasedPDF && !fastMode) {
+          console.log("Detected image-based PDF, using Vision API for full extraction...");
+          try {
+            const pdfBase64 = fileBuffer.toString('base64');
+            const visionContent = await extractTextFromPDFWithVision(pdfBase64);
+            if (visionContent && visionContent.trim().length > 50) {
+              content = visionContent;
+            }
+          } catch (visionError) {
+            console.error("Vision PDF extraction failed:", visionError);
+          }
+        }
+      } catch (pdfError) {
+        // PDF parsing failed (e.g. encrypted, corrupted, or unsupported structure)
+        // Fall back to a placeholder so the submission is still accepted
+        console.error(`PDF text extraction failed for ${originalName}, will use Vision processing:`, pdfError);
+        content = "";
       }
     } 
     // Handle Word documents
@@ -250,7 +261,15 @@ export async function processUploadedFile(
     }
 
     if (!content || content.trim().length === 0) {
-      throw new Error('No text content could be extracted from the file');
+      // For PDFs and presentations, return empty content so the submit route can flag for Vision processing
+      // instead of rejecting the submission outright
+      const isPdfOrPresentation = originalName.match(/\.(pdf|ppt|pptx)$/i) || 
+        mimeType.includes('pdf') || mimeType.includes('presentation') || mimeType.includes('powerpoint');
+      if (isPdfOrPresentation) {
+        content = "";
+      } else {
+        throw new Error('No text content could be extracted from the file');
+      }
     }
 
     return {
