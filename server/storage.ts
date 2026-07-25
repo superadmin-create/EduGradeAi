@@ -198,8 +198,20 @@ export class DatabaseStorage implements IStorage {
     return submission;
   }
 
-  async getSubmissions(assignmentId: string): Promise<Submission[]> {
-    return db.select().from(submissions).where(eq(submissions.assignmentId, assignmentId));
+  async getSubmissions(assignmentId: string): Promise<Omit<Submission, 'rawFileData'> & { rawFileData?: null }[]> {
+    return db.select({
+      id: submissions.id,
+      assignmentId: submissions.assignmentId,
+      studentName: submissions.studentName,
+      studentId: submissions.studentId,
+      studentEmail: submissions.studentEmail,
+      content: submissions.content,
+      fileName: submissions.fileName,
+      fileMimeType: submissions.fileMimeType,
+      needsVisionProcessing: submissions.needsVisionProcessing,
+      submittedAt: submissions.submittedAt,
+      isGraded: submissions.isGraded,
+    }).from(submissions).where(eq(submissions.assignmentId, assignmentId));
   }
 
   async getAllSubmissionsByCollege(collegeId: string): Promise<any[]> {

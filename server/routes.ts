@@ -1250,7 +1250,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             studentId: submission.studentId,
             studentEmail: submission.studentEmail || null,
             fileName: submission.fileName,
-            hasFile: !!(submission.rawFileData && submission.fileName),
+            hasFile: !!submission.fileName,
             submittedAt: submission.submittedAt,
             isGraded: submission.isGraded,
             grade: (gradingResult?.aiAnalysis as any)?.grade || null,

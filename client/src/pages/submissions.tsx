@@ -100,8 +100,40 @@ export default function Submissions() {
     }
   };
 
-  const downloadFile = (submissionId: string) => {
-    window.open(`/api/submissions/${submissionId}/download`, '_blank');
+  const downloadFile = async (submissionId: string) => {
+    try {
+      const response = await fetch(`/api/submissions/${submissionId}/download`, {
+        credentials: "include",
+      });
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        toast({
+          title: "Download Failed",
+          description: err.message || "Could not download file.",
+          variant: "destructive",
+        });
+        return;
+      }
+      const contentDisposition = response.headers.get("Content-Disposition") || "";
+      const fileNameMatch = contentDisposition.match(/filename="?([^"]+)"?/);
+      const fileName = fileNameMatch ? fileNameMatch[1] : "submission";
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = fileName;
+      link.style.display = "none";
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    } catch {
+      toast({
+        title: "Download Failed",
+        description: "An error occurred while downloading the file.",
+        variant: "destructive",
+      });
+    }
   };
 
   const regradeSubmission = async (submissionId: string) => {
