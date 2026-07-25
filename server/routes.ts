@@ -1230,6 +1230,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       for (const assignment of targetAssignments) {
         const assignmentSubmissions = await storage.getSubmissions(assignment.id);
         
+        // Batch-fetch all grading results for this assignment at once
+        const gradingResults = await storage.getGradingResults(assignment.id);
+        const gradingResultMap = new Map(gradingResults.map(r => [r.submissionId, r]));
+        
         for (const submission of assignmentSubmissions) {
           // Filter by date if provided
           if (date) {
@@ -1237,18 +1241,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
             if (submissionDate !== date) continue;
           }
           
-          const gradingResult = await storage.getGradingResult(submission.id);
+          const gradingResult = gradingResultMap.get(submission.id);
           
           exportData.push({
             id: submission.id,
             assignmentTitle: assignment.title,
             studentName: submission.studentName,
             studentId: submission.studentId,
+            studentEmail: submission.studentEmail || null,
             fileName: submission.fileName,
             hasFile: !!(submission.rawFileData && submission.fileName),
             submittedAt: submission.submittedAt,
             isGraded: submission.isGraded,
-            grade: gradingResult?.aiAnalysis?.grade || null,
+            grade: (gradingResult?.aiAnalysis as any)?.grade || null,
             score: gradingResult?.finalScore || null,
             maxScore: gradingResult?.maxScore || null,
             percentage: gradingResult?.percentage || null,

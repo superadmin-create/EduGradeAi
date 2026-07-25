@@ -248,11 +248,12 @@ export default function Submissions() {
       }
 
       const baseUrl = window.location.origin;
-      const headers = ["Assignment", "Student Name", "Student ID", "File Name", "File Download Link", "Submitted At", "Status", "Grade", "Score", "Max Score", "Percentage", "Feedback"];
+      const headers = ["Assignment", "Student Name", "Student ID", "Student Email", "File Name", "File Download Link", "Submitted At", "Status", "Grade", "Score", "Max Score", "Percentage", "Feedback"];
       const rows = data.map((item: any) => [
         item.assignmentTitle,
         item.studentName,
         item.studentId,
+        item.studentEmail || "N/A",
         item.fileName || "Text submission",
         item.hasFile ? `${baseUrl}/api/submissions/${item.id}/download` : "N/A",
         new Date(item.submittedAt).toLocaleString(),
@@ -335,6 +336,7 @@ export default function Submissions() {
           <div class="submission">
             <div class="submission-header">${item.studentName} (${item.studentId})</div>
             <div class="field"><span class="label">Assignment:</span> ${item.assignmentTitle}</div>
+            ${item.studentEmail ? `<div class="field"><span class="label">Email:</span> ${item.studentEmail}</div>` : ""}
             <div class="field"><span class="label">File:</span> ${item.fileName || "Text submission"}${downloadLink ? ` (<a href="${downloadLink}">Download</a>)` : ""}</div>
             <div class="field"><span class="label">Submitted:</span> ${new Date(item.submittedAt).toLocaleString()}</div>
             <div class="field"><span class="label">Status:</span> ${item.isGraded ? "Graded" : "Pending"}</div>
