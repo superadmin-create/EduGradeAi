@@ -1240,7 +1240,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/cross-similarity/run-all", requireAuth, async (req, res) => {
     try {
       const collegeId = req.session.collegeId!;
-      const allSubmissions = await storage.getSubmissionsByCollege(collegeId);
+      const assignments = await storage.getAssignmentsByCollege(collegeId);
+      const allSubmissions: Submission[] = [];
+      for (const assignment of assignments) {
+        const subs = await storage.getSubmissions(assignment.id);
+        allSubmissions.push(...(subs as Submission[]));
+      }
       const graded = allSubmissions.filter(s => s.isGraded);
       res.json({ message: `Running cross-similarity on ${graded.length} submissions...`, count: graded.length });
       // Fire-and-forget after responding
