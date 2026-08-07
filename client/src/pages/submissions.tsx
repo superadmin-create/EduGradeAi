@@ -42,6 +42,7 @@ export default function Submissions() {
   const [checkingPlagiarism, setCheckingPlagiarism] = useState<string | null>(null);
   const [plagiarismResults, setPlagiarismResults] = useState<Record<string, any>>({});
   const [crossSimilarityResults, setCrossSimilarityResults] = useState<Record<string, any>>({});
+  const [isRunningCrossCheck, setIsRunningCrossCheck] = useState(false);
   const [regrading, setRegrading] = useState<string | null>(null);
   const [sendingEmail, setSendingEmail] = useState<string | null>(null);
 
@@ -523,6 +524,33 @@ export default function Submissions() {
             Export Word
           </Button>
           
+          <Button
+            variant="outline"
+            onClick={async () => {
+              setIsRunningCrossCheck(true);
+              try {
+                const resp = await apiRequest("POST", "/api/cross-similarity/run-all");
+                const data = await resp.json();
+                toast({ title: "Cross-similarity check started", description: data.message });
+                // Refresh flags after a short delay to let the backfill run
+                setTimeout(() => queryClient.invalidateQueries({ queryKey: ["/api/cross-similarity/flagged"] }), 5000);
+                setTimeout(() => queryClient.invalidateQueries({ queryKey: ["/api/cross-similarity/flagged"] }), 15000);
+              } catch {
+                toast({ title: "Failed to start cross-check", variant: "destructive" });
+              } finally {
+                setIsRunningCrossCheck(false);
+              }
+            }}
+            disabled={isRunningCrossCheck}
+          >
+            {isRunningCrossCheck ? (
+              <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <GitCompare className="mr-2 h-4 w-4" />
+            )}
+            {isRunningCrossCheck ? "Running..." : "Cross-Check All"}
+          </Button>
+
           <Button 
             onClick={() => setLocation('/upload')}
             data-testid="button-upload-submissions-header"

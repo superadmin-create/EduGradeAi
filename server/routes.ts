@@ -1236,6 +1236,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Get all cross-assignment flags for the college (flagged submissions summary)
+  // Backfill: run cross-similarity on all already-graded submissions for this college
+  app.post("/api/cross-similarity/run-all", requireAuth, async (req, res) => {
+    try {
+      const collegeId = req.session.collegeId!;
+      const allSubmissions = await storage.getSubmissionsByCollege(collegeId);
+      const graded = allSubmissions.filter(s => s.isGraded);
+      res.json({ message: `Running cross-similarity on ${graded.length} submissions...`, count: graded.length });
+      // Fire-and-forget after responding
+      (async () => {
+        for (const sub of graded) {
+          try {
+            await checkCrossAssignmentSimilarity(sub.id, collegeId);
+          } catch {}
+        }
+        console.log(`[CrossSimilarity] Backfill complete for college ${collegeId}: ${graded.length} submissions checked`);
+      })();
+    } catch (error) {
+      res.status(500).json({ message: "Failed to start backfill" });
+    }
+  });
+
   app.get("/api/cross-similarity/flagged", requireAuth, async (req, res) => {
     try {
       const collegeId = req.session.collegeId!;
