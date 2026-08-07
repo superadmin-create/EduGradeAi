@@ -1,4 +1,4 @@
-import { type User, type InsertUser, type Assignment, type InsertAssignment, type Submission, type InsertSubmission, type GradingResult, type InsertGradingResult, type College, type InsertCollege, type PlagiarismResult, type InsertPlagiarismResult, type OtpRequest, type InsertOtpRequest, users, assignments, submissions, gradingResults, colleges, plagiarismResults, otpRequests } from "@shared/schema";
+import { type User, type InsertUser, type Assignment, type InsertAssignment, type Submission, type InsertSubmission, type GradingResult, type InsertGradingResult, type College, type InsertCollege, type PlagiarismResult, type InsertPlagiarismResult, type OtpRequest, type InsertOtpRequest, type CrossAssignmentFlag, type InsertCrossAssignmentFlag, users, assignments, submissions, gradingResults, colleges, plagiarismResults, otpRequests, crossAssignmentFlags } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, sql, or, like, lt, gt, inArray } from "drizzle-orm";
 
@@ -64,6 +64,10 @@ export interface IStorage {
   updateOtpRequest(id: string, data: Partial<OtpRequest>): Promise<OtpRequest | undefined>;
   getRecentOtpRequestsByEmail(email: string, collegeId: string, minutesAgo: number): Promise<OtpRequest[]>;
   cleanupExpiredOtpRequests(): Promise<number>;
+
+  saveCrossAssignmentFlag(flag: InsertCrossAssignmentFlag): Promise<CrossAssignmentFlag>;
+  getCrossAssignmentFlag(submissionId: string): Promise<CrossAssignmentFlag | undefined>;
+  getCrossAssignmentFlagsByCollege(collegeId: string): Promise<CrossAssignmentFlag[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -477,6 +481,29 @@ export class DatabaseStorage implements IStorage {
       lt(otpRequests.expiresAt, new Date())
     ).returning();
     return result.length;
+  }
+
+  async saveCrossAssignmentFlag(flag: InsertCrossAssignmentFlag): Promise<CrossAssignmentFlag> {
+    // Replace existing flag for this submission
+    await db.delete(crossAssignmentFlags).where(eq(crossAssignmentFlags.submissionId, flag.submissionId));
+    const [result] = await db.insert(crossAssignmentFlags).values({
+      submissionId: flag.submissionId,
+      collegeId: flag.collegeId,
+      similarSubmissions: flag.similarSubmissions,
+      maxSimilarityScore: flag.maxSimilarityScore,
+    }).returning();
+    return result;
+  }
+
+  async getCrossAssignmentFlag(submissionId: string): Promise<CrossAssignmentFlag | undefined> {
+    const [result] = await db.select().from(crossAssignmentFlags)
+      .where(eq(crossAssignmentFlags.submissionId, submissionId));
+    return result;
+  }
+
+  async getCrossAssignmentFlagsByCollege(collegeId: string): Promise<CrossAssignmentFlag[]> {
+    return db.select().from(crossAssignmentFlags)
+      .where(eq(crossAssignmentFlags.collegeId, collegeId));
   }
 }
 

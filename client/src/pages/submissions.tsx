@@ -1,7 +1,7 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
-import { Search, FileText, User, Calendar, CheckCircle, Clock, Download, FileSpreadsheet, Trash2, Shield, AlertTriangle, Bot, Users, RefreshCw, Mail } from "lucide-react";
+import { Search, FileText, User, Calendar, CheckCircle, Clock, Download, FileSpreadsheet, Trash2, Shield, AlertTriangle, Bot, Users, RefreshCw, Mail, GitCompare } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -41,6 +41,7 @@ export default function Submissions() {
 
   const [checkingPlagiarism, setCheckingPlagiarism] = useState<string | null>(null);
   const [plagiarismResults, setPlagiarismResults] = useState<Record<string, any>>({});
+  const [crossSimilarityResults, setCrossSimilarityResults] = useState<Record<string, any>>({});
   const [regrading, setRegrading] = useState<string | null>(null);
   const [sendingEmail, setSendingEmail] = useState<string | null>(null);
 
@@ -99,6 +100,7 @@ export default function Submissions() {
       // Result not found is expected for unchecked submissions
     }
   };
+
 
   const downloadFile = async (submissionId: string) => {
     try {
@@ -206,6 +208,21 @@ export default function Submissions() {
     queryKey: ["/api/submissions/all"],
     refetchInterval: 15000,
   });
+
+  // Fetch all cross-assignment flags for the college in one batch call
+  const { data: crossFlagsData } = useQuery({
+    queryKey: ["/api/cross-similarity/flagged"],
+    refetchInterval: 30000,
+  });
+
+  // Convert the array of flags into a map keyed by submissionId
+  useEffect(() => {
+    if (Array.isArray(crossFlagsData)) {
+      const map: Record<string, any> = {};
+      crossFlagsData.forEach((flag: any) => { map[flag.submissionId] = flag; });
+      setCrossSimilarityResults(map);
+    }
+  }, [crossFlagsData]);
 
   // Filter by selected assignment on the client side
   const submissions = selectedAssignment === "all" 
@@ -561,6 +578,16 @@ export default function Submissions() {
                       </CardTitle>
                     </div>
                     {getStatusBadge(submission.isGraded)}
+                    {crossSimilarityResults[submission.id]?.maxSimilarityScore > 0 && (
+                      <Badge
+                        variant={crossSimilarityResults[submission.id].maxSimilarityScore >= 70 ? "destructive" : "secondary"}
+                        className="flex items-center gap-1"
+                        title="Cross-assignment similarity detected"
+                      >
+                        <GitCompare className="h-3 w-3" />
+                        {crossSimilarityResults[submission.id].maxSimilarityScore}% cross-match
+                      </Badge>
+                    )}
                   </div>
                   <div className="flex items-center gap-2">
                     <Button 
@@ -760,6 +787,58 @@ export default function Submissions() {
                         </div>
                       </div>
                     )}
+                  </div>
+                )}
+
+                {crossSimilarityResults[submission.id]?.maxSimilarityScore > 0 && (
+                  <div className="mt-4 p-4 bg-orange-50 dark:bg-orange-950/20 border border-orange-200 dark:border-orange-800 rounded-lg space-y-3">
+                    <div className="flex items-center justify-between">
+                      <h4 className="font-semibold flex items-center gap-2 text-orange-800 dark:text-orange-300">
+                        <GitCompare className="h-4 w-4" />
+                        Cross-Assignment Similarity Detected
+                      </h4>
+                      <Badge
+                        variant={crossSimilarityResults[submission.id].maxSimilarityScore >= 70 ? "destructive" : "secondary"}
+                      >
+                        Max {crossSimilarityResults[submission.id].maxSimilarityScore}% match
+                      </Badge>
+                    </div>
+                    <p className="text-sm text-orange-700 dark:text-orange-400">
+                      This submission shares content with submissions across other assignments. Flagged for review.
+                    </p>
+                    <div className="space-y-2">
+                      {crossSimilarityResults[submission.id].similarSubmissions?.map((similar: any, index: number) => (
+                        <div
+                          key={index}
+                          className="p-3 bg-white dark:bg-background rounded border border-orange-200 dark:border-orange-800 text-sm"
+                        >
+                          <div className="flex items-center justify-between mb-1">
+                            <div>
+                              <span className="font-semibold">{similar.studentName}</span>
+                              <span className="text-muted-foreground ml-2 text-xs">(ID: {similar.studentId})</span>
+                              {similar.studentEmail && (
+                                <span className="text-muted-foreground ml-2 text-xs">{similar.studentEmail}</span>
+                              )}
+                            </div>
+                            <Badge variant={similar.similarityPercentage >= 70 ? "destructive" : "secondary"}>
+                              {similar.similarityPercentage}% match
+                            </Badge>
+                          </div>
+                          <div className="text-xs text-muted-foreground">
+                            <span className="font-medium">Assignment: </span>
+                            {similar.assignmentTitle}
+                          </div>
+                          {similar.matchedPhrases?.length > 0 && (
+                            <div className="mt-1 text-xs text-muted-foreground">
+                              <span className="font-medium">Matched: </span>
+                              {similar.matchedPhrases.slice(0, 2).map((phrase: string, i: number) => (
+                                <span key={i} className="italic">"{phrase.substring(0, 60)}..." </span>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 )}
               </CardContent>

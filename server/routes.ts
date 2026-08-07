@@ -8,6 +8,7 @@ import { insertAssignmentSchema, insertSubmissionSchema, loginSchema, colleges }
 import { gradeAssignment } from "./services/openai";
 import { processUploadedFile, validateFileUpload } from "./services/fileProcessor";
 import { checkPlagiarism, getPlagiarismResult } from "./services/plagiarismService";
+import { checkCrossAssignmentSimilarity } from "./services/crossSimilarityService";
 import { sendSubmissionConfirmationEmail, sendOtpEmail, sendEvaluationEmail } from "./services/emailService";
 import { otpRequestSchema, otpVerifySchema } from "@shared/schema";
 import crypto from "crypto";
@@ -369,6 +370,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           });
           
           await storage.incrementCollegeUsedQuota(collegeId);
+          // Async cross-assignment similarity check
+          checkCrossAssignmentSimilarity(submission.id, collegeId).catch(() => {});
         } catch (gradingError) {
           console.error("Failed to auto-grade submission:", gradingError);
         }
@@ -495,6 +498,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       await storage.incrementCollegeUsedQuota(collegeId);
 
+      // Async cross-assignment similarity check (does not block response)
+      checkCrossAssignmentSimilarity(submission.id, collegeId).catch(() => {});
+
       res.json(result);
     } catch (error) {
       res.status(500).json({ message: "Failed to grade submission", error: (error as Error).message });
@@ -547,6 +553,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           await storage.incrementCollegeUsedQuota(collegeId);
           gradedCount++;
           results.push(result);
+          // Async cross-assignment similarity check
+          checkCrossAssignmentSimilarity(submission.id, collegeId).catch(() => {});
         } catch (error) {
           errors.push({
             submissionId: submission.id,
@@ -750,6 +758,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Update submission status
       await storage.updateSubmission(submission.id, { isGraded: true });
+
+      // Async cross-assignment similarity check
+      checkCrossAssignmentSimilarity(submission.id, collegeId).catch(() => {});
 
       res.json({ 
         message: "Submission regraded successfully", 
@@ -1199,6 +1210,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
             });
             
             await storage.incrementCollegeUsedQuota(college.id);
+            // Async cross-assignment similarity check
+            checkCrossAssignmentSimilarity(submission.id, college.id).catch(() => {});
             console.log(`Background grading completed for submission ${submission.id}: ${gradingResult.grade}`);
           } catch (gradingError) {
             console.error("Failed to grade submission:", gradingError);
@@ -1207,6 +1220,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
     } catch (error) {
       res.status(400).json({ message: "Failed to submit assignment", error: (error as Error).message });
+    }
+  });
+
+  // ======== CROSS-ASSIGNMENT SIMILARITY ROUTES ========
+
+  // Get cross-assignment similarity flag for a single submission
+  app.get("/api/submissions/:id/cross-similarity", requireAuth, async (req, res) => {
+    try {
+      const flag = await storage.getCrossAssignmentFlag(req.params.id);
+      res.json(flag || null);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch cross-assignment similarity" });
+    }
+  });
+
+  // Get all cross-assignment flags for the college (flagged submissions summary)
+  app.get("/api/cross-similarity/flagged", requireAuth, async (req, res) => {
+    try {
+      const collegeId = req.session.collegeId!;
+      const flags = await storage.getCrossAssignmentFlagsByCollege(collegeId);
+      // Only return those with actual similarities found
+      const flagged = flags.filter(f => f.maxSimilarityScore > 0);
+      res.json(flagged);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch flagged submissions" });
     }
   });
 

@@ -85,6 +85,24 @@ export const plagiarismResults = pgTable("plagiarism_results", {
   checkedAt: timestamp("checked_at").default(sql`now()`).notNull(),
 });
 
+export const crossAssignmentFlags = pgTable("cross_assignment_flags", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  submissionId: varchar("submission_id").notNull().references(() => submissions.id),
+  collegeId: varchar("college_id").notNull(),
+  similarSubmissions: jsonb("similar_submissions").$type<{
+    submissionId: string;
+    studentName: string;
+    studentId: string;
+    studentEmail: string | null;
+    assignmentId: string;
+    assignmentTitle: string;
+    similarityPercentage: number;
+    matchedPhrases: string[];
+  }[]>(),
+  maxSimilarityScore: integer("max_similarity_score").notNull().default(0),
+  flaggedAt: timestamp("flagged_at").default(sql`now()`).notNull(),
+});
+
 export const otpRequests = pgTable("otp_requests", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   email: text("email").notNull(),
@@ -164,6 +182,23 @@ export type Submission = typeof submissions.$inferSelect;
 export type GradingResult = typeof gradingResults.$inferSelect;
 export type PlagiarismResult = typeof plagiarismResults.$inferSelect;
 export type OtpRequest = typeof otpRequests.$inferSelect;
+export type CrossAssignmentFlag = typeof crossAssignmentFlags.$inferSelect;
+
+export type InsertCrossAssignmentFlag = {
+  submissionId: string;
+  collegeId: string;
+  similarSubmissions: {
+    submissionId: string;
+    studentName: string;
+    studentId: string;
+    studentEmail: string | null;
+    assignmentId: string;
+    assignmentTitle: string;
+    similarityPercentage: number;
+    matchedPhrases: string[];
+  }[];
+  maxSimilarityScore: number;
+};
 
 export type InsertCollege = z.infer<typeof insertCollegeSchema>;
 export type InsertUser = z.infer<typeof insertUserSchema>;

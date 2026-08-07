@@ -1,6 +1,7 @@
 import { storage } from "../storage";
 import { processUploadedFile } from "./fileProcessor";
 import { gradeAssignment } from "./openai";
+import { checkCrossAssignmentSimilarity } from "./crossSimilarityService";
 
 // Lock to prevent concurrent Vision processing
 let isVisionProcessing = false;
@@ -111,6 +112,15 @@ export async function processVisionSubmissions(): Promise<void> {
           });
           
           await storage.updateSubmission(submission.id, { isGraded: true });
+
+          // Async cross-assignment similarity check
+          const assignment2 = await storage.getAssignment(submission.assignmentId);
+          if (assignment2) {
+            const assignUser = await storage.getUser(assignment2.userId);
+            if (assignUser?.collegeId) {
+              checkCrossAssignmentSimilarity(submission.id, assignUser.collegeId).catch(() => {});
+            }
+          }
           
           console.log(`Grading completed for submission ${submission.id}: ${gradingResult.grade}`);
         } else {
