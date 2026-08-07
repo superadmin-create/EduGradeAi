@@ -205,7 +205,7 @@ export default function Submissions() {
   });
 
   // Fetch all submissions in one fast query
-  const { data: allSubmissions = [], isLoading: submissionsLoading } = useQuery({
+  const { data: allSubmissions = [], isLoading: submissionsLoading } = useQuery<Submission[]>({
     queryKey: ["/api/submissions/all"],
     refetchInterval: 15000,
   });
@@ -535,8 +535,13 @@ export default function Submissions() {
                 // Refresh flags after a short delay to let the backfill run
                 setTimeout(() => queryClient.invalidateQueries({ queryKey: ["/api/cross-similarity/flagged"] }), 5000);
                 setTimeout(() => queryClient.invalidateQueries({ queryKey: ["/api/cross-similarity/flagged"] }), 15000);
-              } catch {
-                toast({ title: "Failed to start cross-check", variant: "destructive" });
+              } catch (err) {
+                console.error("Cross-check failed:", err);
+                toast({
+                  title: "Failed to start cross-check",
+                  description: (err as Error)?.message ?? "Unknown error",
+                  variant: "destructive",
+                });
               } finally {
                 setIsRunningCrossCheck(false);
               }

@@ -23,7 +23,8 @@ export interface IStorage {
   deleteAssignment(id: string): Promise<boolean>;
 
   getSubmission(id: string): Promise<Submission | undefined>;
-  getSubmissions(assignmentId: string): Promise<Submission[]>;
+  getSubmissions(assignmentId: string): Promise<(Omit<Submission, 'rawFileData'> & { rawFileData?: null })[]>;
+  getAllSubmissionsWithContentByCollege(collegeId: string): Promise<any[]>;
   getAllSubmissionsByCollege(collegeId: string): Promise<any[]>;
   getSubmissionsByStudent(studentId: string): Promise<Submission[]>;
   createSubmission(submission: InsertSubmission): Promise<Submission>;
@@ -57,7 +58,7 @@ export interface IStorage {
   getPlagiarismResult(submissionId: string): Promise<PlagiarismResult | undefined>;
   createPlagiarismResult(result: InsertPlagiarismResult): Promise<PlagiarismResult>;
   deletePlagiarismResult(submissionId: string): Promise<boolean>;
-  getSubmissionsForPlagiarismCheck(assignmentId: string, excludeSubmissionId: string): Promise<Submission[]>;
+  getSubmissionsForPlagiarismCheck(assignmentId: string, excludeSubmissionId: string): Promise<(Omit<Submission, 'rawFileData'> & { rawFileData?: null })[]>;
 
   createOtpRequest(request: InsertOtpRequest): Promise<OtpRequest>;
   getOtpRequest(id: string): Promise<OtpRequest | undefined>;
@@ -68,6 +69,7 @@ export interface IStorage {
   saveCrossAssignmentFlag(flag: InsertCrossAssignmentFlag): Promise<CrossAssignmentFlag>;
   getCrossAssignmentFlag(submissionId: string): Promise<CrossAssignmentFlag | undefined>;
   getCrossAssignmentFlagsByCollege(collegeId: string): Promise<CrossAssignmentFlag[]>;
+  replaceCrossAssignmentFlagsForCollege(collegeId: string, flags: InsertCrossAssignmentFlag[]): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -202,7 +204,7 @@ export class DatabaseStorage implements IStorage {
     return submission;
   }
 
-  async getSubmissions(assignmentId: string): Promise<Omit<Submission, 'rawFileData'> & { rawFileData?: null }[]> {
+  async getSubmissions(assignmentId: string): Promise<(Omit<Submission, 'rawFileData'> & { rawFileData?: null })[]> {
     return db.select({
       id: submissions.id,
       assignmentId: submissions.assignmentId,
@@ -235,6 +237,25 @@ export class DatabaseStorage implements IStorage {
       inArray(submissions.assignmentId, assignmentIds)
     );
     return allSubs;
+  }
+
+  // Loads every submission for a college WITH content in a single query.
+  // Excludes rawFileData (huge base64 blobs) to stay memory-safe.
+  async getAllSubmissionsWithContentByCollege(collegeId: string): Promise<any[]> {
+    const collegeAssignments = await this.getAssignmentsByCollege(collegeId);
+    if (collegeAssignments.length === 0) return [];
+    const assignmentIds = collegeAssignments.map(a => a.id);
+    return db.select({
+      id: submissions.id,
+      assignmentId: submissions.assignmentId,
+      studentName: submissions.studentName,
+      studentId: submissions.studentId,
+      studentEmail: submissions.studentEmail,
+      content: submissions.content,
+      isGraded: submissions.isGraded,
+    }).from(submissions).where(
+      inArray(submissions.assignmentId, assignmentIds)
+    );
   }
 
   async getSubmissionsByStudent(studentId: string): Promise<Submission[]> {
@@ -436,7 +457,7 @@ export class DatabaseStorage implements IStorage {
     return true;
   }
 
-  async getSubmissionsForPlagiarismCheck(assignmentId: string, excludeSubmissionId: string): Promise<Submission[]> {
+  async getSubmissionsForPlagiarismCheck(assignmentId: string, excludeSubmissionId: string): Promise<(Omit<Submission, 'rawFileData'> & { rawFileData?: null })[]> {
     const allSubmissions = await this.getSubmissions(assignmentId);
     return allSubmissions.filter(s => s.id !== excludeSubmissionId && s.content && s.content.trim().length > 0);
   }
@@ -504,6 +525,25 @@ export class DatabaseStorage implements IStorage {
   async getCrossAssignmentFlagsByCollege(collegeId: string): Promise<CrossAssignmentFlag[]> {
     return db.select().from(crossAssignmentFlags)
       .where(eq(crossAssignmentFlags.collegeId, collegeId));
+  }
+
+  // Bulk replace for the backfill: one delete plus batched inserts, instead of
+  // a delete+insert round trip per submission.
+  async replaceCrossAssignmentFlagsForCollege(
+    collegeId: string,
+    flags: InsertCrossAssignmentFlag[]
+  ): Promise<void> {
+    // Single transaction: a crash midway must not leave the college with its
+    // old flags deleted and the new ones missing.
+    await db.transaction(async (tx) => {
+      await tx.delete(crossAssignmentFlags).where(eq(crossAssignmentFlags.collegeId, collegeId));
+      const BATCH_SIZE = 200;
+      for (let i = 0; i < flags.length; i += BATCH_SIZE) {
+        const chunk = flags.slice(i, i + BATCH_SIZE);
+        if (chunk.length === 0) continue;
+        await tx.insert(crossAssignmentFlags).values(chunk as any);
+      }
+    });
   }
 }
 

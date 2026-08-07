@@ -1,0 +1,3 @@
+- [Which database the app actually uses](which-database.md) — app reads DATABASE_URL; a second unused NEON_DATABASE_URL secret exists and querying it gives wrong answers.
+- [Cross-assignment similarity design](cross-similarity-design.md) — containment scoring, why same-student and OCR/placeholder rows are excluded, and why brute-force pairwise is not viable.
+- [Verifying against real corpus size](verify-with-real-data.md) — this project's corpus is thousands of submissions; validate perf/quality on real data before shipping matching logic.

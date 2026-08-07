@@ -8,7 +8,7 @@ import { insertAssignmentSchema, insertSubmissionSchema, loginSchema, colleges }
 import { gradeAssignment } from "./services/openai";
 import { processUploadedFile, validateFileUpload } from "./services/fileProcessor";
 import { checkPlagiarism, getPlagiarismResult } from "./services/plagiarismService";
-import { checkCrossAssignmentSimilarity } from "./services/crossSimilarityService";
+import { checkCrossAssignmentSimilarity, runCrossSimilarityBackfill, isBackfillRunning, getBackfillProgress } from "./services/crossSimilarityService";
 import { sendSubmissionConfirmationEmail, sendOtpEmail, sendEvaluationEmail } from "./services/emailService";
 import { otpRequestSchema, otpVerifySchema } from "@shared/schema";
 import crypto from "crypto";
@@ -1229,7 +1229,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/submissions/:id/cross-similarity", requireAuth, async (req, res) => {
     try {
       const flag = await storage.getCrossAssignmentFlag(req.params.id);
-      res.json(flag || null);
+      // Enforce college ownership: flags carry student names, IDs, emails and
+      // matched phrases, and must never cross a college boundary.
+      if (!flag || flag.collegeId !== req.session.collegeId) {
+        return res.json(null);
+      }
+      res.json(flag);
     } catch (error) {
       res.status(500).json({ message: "Failed to fetch cross-assignment similarity" });
     }
@@ -1240,26 +1245,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/cross-similarity/run-all", requireAuth, async (req, res) => {
     try {
       const collegeId = req.session.collegeId!;
-      const assignments = await storage.getAssignmentsByCollege(collegeId);
-      const allSubmissions: Submission[] = [];
-      for (const assignment of assignments) {
-        const subs = await storage.getSubmissions(assignment.id);
-        allSubmissions.push(...(subs as Submission[]));
+
+      if (isBackfillRunning(collegeId)) {
+        return res.json({ message: "A cross-similarity scan is already running. Results will appear shortly." });
       }
-      const graded = allSubmissions.filter(s => s.isGraded);
-      res.json({ message: `Running cross-similarity on ${graded.length} submissions...`, count: graded.length });
-      // Fire-and-forget after responding
-      (async () => {
-        for (const sub of graded) {
-          try {
-            await checkCrossAssignmentSimilarity(sub.id, collegeId);
-          } catch {}
-        }
-        console.log(`[CrossSimilarity] Backfill complete for college ${collegeId}: ${graded.length} submissions checked`);
-      })();
+
+      // Respond immediately; the scan runs in the background.
+      res.json({ message: "Scanning all submissions for cross-assignment reuse..." });
+
+      runCrossSimilarityBackfill(collegeId).catch((err) => {
+        console.error("[CrossSimilarity] Background backfill error:", err);
+      });
     } catch (error) {
-      res.status(500).json({ message: "Failed to start backfill" });
+      console.error("[CrossSimilarity] Backfill failed to start:", error);
+      res.status(500).json({ message: `Failed to start backfill: ${(error as Error).message}` });
     }
+  });
+
+  // Progress of an in-flight backfill, so the UI can show status.
+  app.get("/api/cross-similarity/progress", requireAuth, async (req, res) => {
+    const collegeId = req.session.collegeId!;
+    res.json(getBackfillProgress(collegeId) ?? { running: false });
   });
 
   app.get("/api/cross-similarity/flagged", requireAuth, async (req, res) => {
