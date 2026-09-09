@@ -27,6 +27,7 @@ export interface IStorage {
   getAllSubmissionsWithContentByCollege(collegeId: string): Promise<any[]>;
   getAllSubmissionsByCollege(collegeId: string): Promise<any[]>;
   getSubmissionsByStudent(studentId: string): Promise<Submission[]>;
+  getSubmissionByAssignmentAndEmail(assignmentId: string, email: string): Promise<Submission | undefined>;
   createSubmission(submission: InsertSubmission): Promise<Submission>;
   updateSubmission(id: string, submission: Partial<Submission>): Promise<Submission | undefined>;
   deleteSubmission(id: string): Promise<boolean>;
@@ -260,6 +261,16 @@ export class DatabaseStorage implements IStorage {
 
   async getSubmissionsByStudent(studentId: string): Promise<Submission[]> {
     return db.select().from(submissions).where(eq(submissions.studentId, studentId));
+  }
+
+  async getSubmissionByAssignmentAndEmail(assignmentId: string, email: string): Promise<Submission | undefined> {
+    const [submission] = await db.select().from(submissions).where(
+      and(
+        eq(submissions.assignmentId, assignmentId),
+        eq(submissions.studentEmail, email.toLowerCase().trim())
+      )
+    );
+    return submission;
   }
 
   async createSubmission(insertSubmission: InsertSubmission): Promise<Submission> {

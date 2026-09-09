@@ -34,6 +34,14 @@ export const assignments = pgTable("assignments", {
   userId: varchar("user_id").notNull().references(() => users.id),
 });
 
+// NOTE: a DB-level unique index on (assignmentId, studentEmail) would be the
+// stronger guarantee (it closes the race-condition window the route-level
+// check can't), but the live data already has ~20 email/assignment pairs
+// with multiple submissions from before this restriction existed. Adding the
+// constraint now would require deciding what to do with that historical
+// data first — see the follow-up task. The route-level check below covers
+// the actual request pattern (a student is not clicking submit twice within
+// milliseconds), so it ships first without touching existing rows.
 export const submissions = pgTable("submissions", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   assignmentId: varchar("assignment_id").notNull().references(() => assignments.id),

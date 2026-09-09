@@ -59,6 +59,21 @@ export default function StudentAssignmentPortal() {
     enabled: !!college && !!assignmentSlug,
   });
 
+  const [isCheckingEmail, setIsCheckingEmail] = useState(false);
+
+  const checkEmailMutation = useMutation({
+    mutationFn: async (email: string) => {
+      const res = await fetch(
+        `/api/public/${collegeCode}/assignments/${assignmentSlug}/check-email?email=${encodeURIComponent(email)}`
+      );
+      if (!res.ok) {
+        const error = await res.json().catch(() => ({}));
+        throw new Error(error.message || "Failed to verify email");
+      }
+      return res.json() as Promise<{ allowed: boolean; alreadySubmitted: boolean; message?: string }>;
+    },
+  });
+
   const submitMutation = useMutation({
     mutationFn: async (formData: FormData) => {
       const maxRetries = 3;
@@ -159,7 +174,7 @@ export default function StudentAssignmentPortal() {
     maxSize: 10 * 1024 * 1024,
   });
 
-  const handleEmailContinue = (e: React.FormEvent) => {
+  const handleEmailContinue = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!studentEmail) {
       toast({
@@ -169,7 +184,36 @@ export default function StudentAssignmentPortal() {
       });
       return;
     }
-    setStep("submission");
+
+    setIsCheckingEmail(true);
+    try {
+      const result = await checkEmailMutation.mutateAsync(studentEmail);
+      if (result.alreadySubmitted) {
+        toast({
+          title: "Already Submitted",
+          description: result.message || "You have already submitted this assignment. Only one submission is allowed per email address.",
+          variant: "destructive",
+        });
+        return;
+      }
+      if (!result.allowed) {
+        toast({
+          title: "Email Not Allowed",
+          description: result.message || "This email address is not allowed to submit this assignment.",
+          variant: "destructive",
+        });
+        return;
+      }
+      setStep("submission");
+    } catch (error) {
+      toast({
+        title: "Could Not Verify Email",
+        description: (error as Error).message || "Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsCheckingEmail(false);
+    }
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -345,11 +389,11 @@ export default function StudentAssignmentPortal() {
                 <Button
                   type="submit"
                   className="w-full"
-                  disabled={!studentEmail}
+                  disabled={!studentEmail || isCheckingEmail}
                   data-testid="button-continue"
                 >
                   <ArrowRight className="h-4 w-4 mr-2" />
-                  Continue
+                  {isCheckingEmail ? "Checking..." : "Continue"}
                 </Button>
               </form>
             </CardContent>

@@ -1075,6 +1075,43 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Lets the portal warn the student before they fill out the form and
+  // upload a file, rather than only rejecting at the final submit step.
+  app.get("/api/public/:collegeCode/assignments/:slugOrId/check-email", async (req, res) => {
+    try {
+      const college = await storage.getCollegeByCode(req.params.collegeCode);
+      if (!college || !college.isActive) {
+        return res.status(404).json({ message: "College not found" });
+      }
+
+      const assignment = await findAssignmentBySlugOrId(college.id, req.params.slugOrId);
+      if (!assignment) {
+        return res.status(404).json({ message: "Assignment not found" });
+      }
+
+      const email = (req.query.email as string || "").toLowerCase().trim();
+      if (!email) {
+        return res.status(400).json({ message: "Email address is required" });
+      }
+
+      if (assignment.allowedEmails && assignment.allowedEmails.length > 0) {
+        const allowed = assignment.allowedEmails.map((e: string) => e.toLowerCase().trim());
+        if (!allowed.includes(email)) {
+          return res.json({ allowed: false, alreadySubmitted: false, message: "This email address is not allowed to submit this assignment. Please contact your instructor." });
+        }
+      }
+
+      const existingSubmission = await storage.getSubmissionByAssignmentAndEmail(assignment.id, email);
+      if (existingSubmission) {
+        return res.json({ allowed: true, alreadySubmitted: true, message: "You have already submitted this assignment. Only one submission is allowed per email address." });
+      }
+
+      res.json({ allowed: true, alreadySubmitted: false });
+    } catch (error) {
+      res.status(500).json({ message: "Failed to check email" });
+    }
+  });
+
   // Student submission (public - no auth required) - supports slug or ID
   app.post("/api/public/:collegeCode/assignments/:slugOrId/submit", upload.single("file"), async (req, res) => {
     try {
@@ -1105,6 +1142,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         if (!allowed.includes(normalizedEmail)) {
           return res.status(403).json({ message: "This email address is not allowed to submit this assignment. Please contact your instructor." });
         }
+      }
+
+      // One submission per email per assignment. A DB unique index backs this
+      // up in case two requests race past this check at the same instant.
+      const existingSubmission = await storage.getSubmissionByAssignmentAndEmail(assignment.id, normalizedEmail);
+      if (existingSubmission) {
+        return res.status(409).json({ message: "You have already submitted this assignment. Only one submission is allowed per email address." });
       }
 
       // Validate file exists
