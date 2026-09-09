@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { Search, FileText, User, Calendar, CheckCircle, Clock, Download, FileSpreadsheet, Trash2, Shield, AlertTriangle, Bot, Users, RefreshCw, Mail, GitCompare } from "lucide-react";
@@ -43,6 +43,10 @@ export default function Submissions() {
   const [plagiarismResults, setPlagiarismResults] = useState<Record<string, any>>({});
   const [crossSimilarityResults, setCrossSimilarityResults] = useState<Record<string, any>>({});
   const [isRunningCrossCheck, setIsRunningCrossCheck] = useState(false);
+  const [isPollingCrossCheck, setIsPollingCrossCheck] = useState(false);
+  // Guards the completion toast: only report a finish for a scan we actually
+  // observed running, not for the leftover progress of an earlier scan.
+  const sawCrossCheckRunning = useRef(false);
   const [regrading, setRegrading] = useState<string | null>(null);
   const [sendingEmail, setSendingEmail] = useState<string | null>(null);
 
@@ -216,6 +220,71 @@ export default function Submissions() {
     refetchInterval: 30000,
   });
 
+  interface CrossCheckProgress {
+    running: boolean;
+    total?: number;
+    processed?: number;
+    flagged?: number;
+    error?: string;
+  }
+
+  // Progress of the full cross-assignment scan. Polled only while a scan is in
+  // flight; the initial fetch also picks up a scan started before this page
+  // loaded (or in another tab).
+  const { data: crossCheckProgress, error: crossCheckProgressError } = useQuery<CrossCheckProgress>({
+    queryKey: ["/api/cross-similarity/progress"],
+    refetchInterval: isPollingCrossCheck ? 1000 : false,
+  });
+
+  // If we can no longer read progress, say so and stop, rather than leaving the
+  // button spinning on a scan we have lost track of.
+  useEffect(() => {
+    if (!isPollingCrossCheck || !crossCheckProgressError) return;
+    sawCrossCheckRunning.current = false;
+    setIsPollingCrossCheck(false);
+    setIsRunningCrossCheck(false);
+    toast({
+      title: "Lost track of the cross-check",
+      description:
+        (crossCheckProgressError as Error)?.message ??
+        "Could not read scan progress. The scan may still be running.",
+      variant: "destructive",
+    });
+  }, [crossCheckProgressError, isPollingCrossCheck, toast]);
+
+  useEffect(() => {
+    if (!crossCheckProgress) return;
+
+    if (crossCheckProgress.running) {
+      sawCrossCheckRunning.current = true;
+      setIsPollingCrossCheck(true);
+      return;
+    }
+
+    // Not running. Only treat this as a completion if we saw it running.
+    if (!sawCrossCheckRunning.current) return;
+    sawCrossCheckRunning.current = false;
+    setIsPollingCrossCheck(false);
+    setIsRunningCrossCheck(false);
+
+    if (crossCheckProgress.error) {
+      toast({
+        title: "Cross-check failed",
+        description: crossCheckProgress.error,
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const checked = crossCheckProgress.processed ?? 0;
+    const flagged = crossCheckProgress.flagged ?? 0;
+    queryClient.invalidateQueries({ queryKey: ["/api/cross-similarity/flagged"] });
+    toast({
+      title: "Cross-check complete",
+      description: `Checked ${checked.toLocaleString()} submissions — ${flagged.toLocaleString()} flagged for cross-assignment reuse.`,
+    });
+  }, [crossCheckProgress, queryClient, toast]);
+
   // Convert the array of flags into a map keyed by submissionId
   useEffect(() => {
     if (Array.isArray(crossFlagsData)) {
@@ -248,6 +317,22 @@ export default function Submissions() {
     
     return matchesSearch;
   }) || [];
+
+  // Button state for the full cross-assignment scan: busy while we are either
+  // starting it or watching a running one, with live counts once available.
+  const crossCheckBusy = isRunningCrossCheck || isPollingCrossCheck;
+  let crossCheckLabel = "Cross-Check All";
+  if (crossCheckBusy) {
+    const isLive = crossCheckProgress?.running === true;
+    const total = crossCheckProgress?.total ?? 0;
+    if (isLive && total > 0) {
+      const processed = crossCheckProgress?.processed ?? 0;
+      const flagged = crossCheckProgress?.flagged ?? 0;
+      crossCheckLabel = `Checked ${processed.toLocaleString()} of ${total.toLocaleString()} — ${flagged.toLocaleString()} flagged`;
+    } else {
+      crossCheckLabel = "Starting scan...";
+    }
+  }
 
   const getStatusIcon = (isGraded: boolean) => {
     if (isGraded) {
@@ -532,9 +617,13 @@ export default function Submissions() {
                 const resp = await apiRequest("POST", "/api/cross-similarity/run-all");
                 const data = await resp.json();
                 toast({ title: "Cross-similarity check started", description: data.message });
-                // Refresh flags after a short delay to let the backfill run
-                setTimeout(() => queryClient.invalidateQueries({ queryKey: ["/api/cross-similarity/flagged"] }), 5000);
-                setTimeout(() => queryClient.invalidateQueries({ queryKey: ["/api/cross-similarity/flagged"] }), 15000);
+                // Poll the progress endpoint until the background scan finishes.
+                // Arm the completion guard here rather than waiting to observe
+                // `running: true`, so a scan that finishes between two polls
+                // still reports its result instead of spinning forever.
+                sawCrossCheckRunning.current = true;
+                setIsPollingCrossCheck(true);
+                queryClient.invalidateQueries({ queryKey: ["/api/cross-similarity/progress"] });
               } catch (err) {
                 console.error("Cross-check failed:", err);
                 toast({
@@ -542,18 +631,18 @@ export default function Submissions() {
                   description: (err as Error)?.message ?? "Unknown error",
                   variant: "destructive",
                 });
-              } finally {
                 setIsRunningCrossCheck(false);
               }
             }}
-            disabled={isRunningCrossCheck}
+            disabled={crossCheckBusy}
+            data-testid="button-cross-check-all"
           >
-            {isRunningCrossCheck ? (
+            {crossCheckBusy ? (
               <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
             ) : (
               <GitCompare className="mr-2 h-4 w-4" />
             )}
-            {isRunningCrossCheck ? "Running..." : "Cross-Check All"}
+            <span data-testid="text-cross-check-status">{crossCheckLabel}</span>
           </Button>
 
           <Button 
