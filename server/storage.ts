@@ -290,8 +290,12 @@ export class DatabaseStorage implements IStorage {
   }
 
   async deleteSubmission(id: string): Promise<boolean> {
-    // First delete any associated grading results
+    // Delete all rows that reference this submission via a non-cascading FK
+    // before deleting the submission itself, or the delete fails with a
+    // foreign key violation.
     await db.delete(gradingResults).where(eq(gradingResults.submissionId, id));
+    await db.delete(plagiarismResults).where(eq(plagiarismResults.submissionId, id));
+    await db.delete(crossAssignmentFlags).where(eq(crossAssignmentFlags.submissionId, id));
     // Then delete the submission
     await db.delete(submissions).where(eq(submissions.id, id));
     return true;

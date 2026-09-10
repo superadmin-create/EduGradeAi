@@ -2,3 +2,4 @@
 - [Cross-assignment similarity design](cross-similarity-design.md) — containment scoring, why same-student and OCR/placeholder rows are excluded, and why brute-force pairwise is not viable.
 - [Cross-check scan progress UI](cross-check-progress-ui.md) — the full scan can finish before the first progress poll, and stale progress lingers after it ends.
 - [Verifying against real corpus size](verify-with-real-data.md) — this project's corpus is thousands of submissions; validate perf/quality on real data before shipping matching logic.
+- [Submission delete must clear all dependent tables](submission-delete-fk.md) — grading_results, plagiarism_results, and cross_assignment_flags all FK to submissions; delete must clear all three.
