@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
-import { Plus, Search, FileText, Users, Calendar, MoreHorizontal, Trash2, Edit } from "lucide-react";
+import { Plus, Search, FileText, Users, Calendar, MoreHorizontal, Trash2, Edit, Ban, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -18,6 +18,7 @@ interface Assignment {
   maxPoints: number;
   caseStudyContent: string;
   description?: string;
+  isActive?: boolean;
 }
 
 export default function Assignments() {
@@ -78,6 +79,32 @@ export default function Assignments() {
       });
     },
   });
+
+  const toggleActiveMutation = useMutation({
+    mutationFn: async ({ id, isActive }: { id: string; isActive: boolean }) => {
+      await apiRequest("PUT", `/api/assignments/${id}`, { isActive });
+    },
+    onSuccess: (_data, variables) => {
+      toast({
+        title: variables.isActive ? "Assignment reactivated" : "Assignment deactivated",
+        description: variables.isActive
+          ? "The submission link is active again."
+          : "The submission link will now tell students the deadline has passed.",
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/assignments"] });
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to update assignment status",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleToggleActive = (assignment: Assignment) => {
+    toggleActiveMutation.mutate({ id: assignment.id, isActive: !(assignment.isActive ?? true) });
+  };
 
   const filteredAssignments = assignments?.filter((assignment) =>
     assignment.title.toLowerCase().includes(searchQuery.toLowerCase())
@@ -185,6 +212,22 @@ export default function Assignments() {
                         <Edit className="mr-2 h-4 w-4" />
                         Edit
                       </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() => handleToggleActive(assignment)}
+                        data-testid={`button-toggle-active-assignment-${assignment.id}`}
+                      >
+                        {(assignment.isActive ?? true) ? (
+                          <>
+                            <Ban className="mr-2 h-4 w-4" />
+                            Deactivate
+                          </>
+                        ) : (
+                          <>
+                            <CheckCircle2 className="mr-2 h-4 w-4" />
+                            Reactivate
+                          </>
+                        )}
+                      </DropdownMenuItem>
                       <DropdownMenuItem 
                         className="text-destructive"
                         onClick={() => handleDeleteAssignment(assignment.id)}
@@ -199,9 +242,16 @@ export default function Assignments() {
               <CardContent>
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
-                    <Badge variant="outline" className="text-xs">
-                      Case Study
-                    </Badge>
+                    <div className="flex items-center gap-2">
+                      <Badge variant="outline" className="text-xs">
+                        Case Study
+                      </Badge>
+                      {!(assignment.isActive ?? true) && (
+                        <Badge variant="destructive" className="text-xs" data-testid={`badge-inactive-${assignment.id}`}>
+                          Deactivated
+                        </Badge>
+                      )}
+                    </div>
                     <span className="text-sm font-medium text-foreground">
                       {assignment.maxPoints} Points
                     </span>

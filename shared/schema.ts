@@ -30,6 +30,7 @@ export const assignments = pgTable("assignments", {
   maxPoints: integer("max_points").notNull().default(100),
   dueDate: timestamp("due_date"),
   allowedEmails: text("allowed_emails").array(),
+  isActive: boolean("is_active").notNull().default(true),
   createdAt: timestamp("created_at").default(sql`now()`).notNull(),
   userId: varchar("user_id").notNull().references(() => users.id),
 });

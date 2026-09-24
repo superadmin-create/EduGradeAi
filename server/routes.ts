@@ -942,6 +942,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!assignment) {
         return res.status(404).json({ message: "Assignment not found" });
       }
+
+      if (!assignment.isActive) {
+        return res.status(410).json({
+          message: "This assignment is no longer accepting submissions. The deadline has passed.",
+          isActive: false,
+        });
+      }
       
       // Return only basic info for students (no grading criteria)
       res.json({
@@ -951,6 +958,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         description: assignment.description,
         maxPoints: assignment.maxPoints,
         dueDate: assignment.dueDate,
+        isActive: assignment.isActive,
       });
     } catch (error) {
       res.status(500).json({ message: "Failed to fetch assignment" });
@@ -1089,6 +1097,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Assignment not found" });
       }
 
+      if (!assignment.isActive) {
+        return res.json({ allowed: false, alreadySubmitted: false, message: "This assignment is no longer accepting submissions. The deadline has passed." });
+      }
+
       const email = (req.query.email as string || "").toLowerCase().trim();
       if (!email) {
         return res.status(400).json({ message: "Email address is required" });
@@ -1123,6 +1135,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const assignment = await findAssignmentBySlugOrId(college.id, req.params.slugOrId);
       if (!assignment) {
         return res.status(404).json({ message: "Assignment not found" });
+      }
+
+      if (!assignment.isActive) {
+        return res.status(410).json({ message: "This assignment is no longer accepting submissions. The deadline has passed." });
       }
 
       // Validate student name, ID, and email

@@ -16,6 +16,14 @@ interface PublicAssignment {
   description: string | null;
   maxPoints: number;
   dueDate: string | null;
+  isActive?: boolean;
+}
+
+class AssignmentInactiveError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "AssignmentInactiveError";
+  }
 }
 
 interface CollegeInfo {
@@ -53,9 +61,16 @@ export default function StudentAssignmentPortal() {
     queryKey: ["/api/public", collegeCode, "assignments", assignmentSlug],
     queryFn: async () => {
       const res = await fetch(`/api/public/${collegeCode}/assignments/${assignmentSlug}`);
-      if (!res.ok) throw new Error("Assignment not found");
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        if (res.status === 410) {
+          throw new AssignmentInactiveError(body.message || "This assignment is no longer accepting submissions. The deadline has passed.");
+        }
+        throw new Error(body.message || "Assignment not found");
+      }
       return res.json();
     },
+    retry: false,
     enabled: !!college && !!assignmentSlug,
   });
 
@@ -262,6 +277,22 @@ export default function StudentAssignmentPortal() {
             <CardTitle className="text-red-600">College Not Found</CardTitle>
             <CardDescription>
               The college portal you're looking for doesn't exist or is inactive.
+            </CardDescription>
+          </CardHeader>
+        </Card>
+      </div>
+    );
+  }
+
+  if (assignmentError instanceof AssignmentInactiveError) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
+        <Card className="w-full max-w-md">
+          <CardHeader className="text-center">
+            <Calendar className="h-12 w-12 text-amber-500 mx-auto mb-2" />
+            <CardTitle className="text-amber-600">Submission Deadline Passed</CardTitle>
+            <CardDescription>
+              {assignmentError.message}
             </CardDescription>
           </CardHeader>
         </Card>
