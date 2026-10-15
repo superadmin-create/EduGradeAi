@@ -184,20 +184,23 @@ export class DatabaseStorage implements IStorage {
   }
 
   async deleteAssignment(id: string): Promise<boolean> {
-    // First get all submissions for this assignment
-    const assignmentSubmissions = await this.getSubmissions(id);
-    
-    // Delete grading results for each submission
-    for (const submission of assignmentSubmissions) {
-      await db.delete(gradingResults).where(eq(gradingResults.submissionId, submission.id));
-    }
-    
-    // Delete all submissions for this assignment
-    await db.delete(submissions).where(eq(submissions.assignmentId, id));
-    
-    // Finally delete the assignment
-    await db.delete(assignments).where(eq(assignments.id, id));
-    return true;
+    return db.transaction(async (tx) => {
+      // Lock the parent so new submissions cannot be added during cleanup.
+      const [assignment] = await tx.select({ id: assignments.id }).from(assignments)
+        .where(eq(assignments.id, id)).for("update");
+      if (!assignment) return false;
+
+      const submissionIds = tx.select({ id: submissions.id }).from(submissions)
+        .where(eq(submissions.assignmentId, id));
+      await tx.delete(gradingResults).where(inArray(gradingResults.submissionId, submissionIds));
+      await tx.delete(plagiarismResults).where(inArray(plagiarismResults.submissionId, submissionIds));
+      await tx.delete(crossAssignmentFlags).where(inArray(crossAssignmentFlags.submissionId, submissionIds));
+      await tx.delete(otpRequests).where(eq(otpRequests.assignmentId, id));
+      await tx.delete(submissions).where(eq(submissions.assignmentId, id));
+      const deleted = await tx.delete(assignments).where(eq(assignments.id, id))
+        .returning({ id: assignments.id });
+      return deleted.length > 0;
+    });
   }
 
   async getSubmission(id: string): Promise<Submission | undefined> {

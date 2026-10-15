@@ -111,7 +111,7 @@ export default function Assignments() {
   ) || [];
 
   const handleDeleteAssignment = (id: string) => {
-    if (confirm("Are you sure you want to delete this assignment?")) {
+    if (confirm("Permanently delete this assignment and all its submissions, grades, and check results? This cannot be undone. To only close the submission link, use Deactivate instead.")) {
       deleteAssignmentMutation.mutate(id);
     }
   };

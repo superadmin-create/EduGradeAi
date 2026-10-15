@@ -269,6 +269,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       res.status(204).send();
     } catch (error) {
+      console.error("Failed to delete assignment:", error);
       res.status(500).json({ message: "Failed to delete assignment" });
     }
   });
